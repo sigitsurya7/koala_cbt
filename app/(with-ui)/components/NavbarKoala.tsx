@@ -13,7 +13,7 @@ import {
   NavbarItem,
   NavbarBrand,
 } from "@heroui/react";
-import { FiMenu } from "react-icons/fi";
+import { FiLogOut, FiMenu, FiSettings } from "react-icons/fi";
 
 type NavbarKoalaProps = {
   onToggleSidebar?: () => void;
@@ -65,8 +65,8 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
                   <span className="text-xs opacity-60">koala@creative.com</span>
                 </div>
               </DropdownItem>
-              <DropdownItem key="settings">Pengaturan</DropdownItem>
-              <DropdownItem key="logout" color="danger" className="text-danger">
+              <DropdownItem startContent={<FiSettings />} key="settings">Pengaturan</DropdownItem>
+              <DropdownItem startContent={<FiLogOut />} key="logout" color="danger" className="text-danger">
                 Keluar
               </DropdownItem>
             </DropdownMenu>

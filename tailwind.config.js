@@ -91,14 +91,7 @@ const config = {
             danger: "#F87171",
             info: "#38BDF8",
             divider: "#334155",
-          },
-          layout: {
-            radius: {
-              small: "0.5rem",
-              medium: "1rem",
-              large: "1.5rem",
-            },
-          },
+          }
         },
         // 🐨 Optional Custom: “Koala Night” (fusion style)
         koala: {

@@ -1,0 +1,416 @@
+// ---------- Prisma Base ----------
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ---------- ENUM ----------
+enum RoleScope {
+  GLOBAL
+  SCHOOL
+}
+
+enum UserType {
+  SISWA
+  GURU
+  STAFF
+  ADMIN
+}
+
+enum QType {
+  MCQ
+  ESSAY
+}
+
+enum AttemptStatus {
+  ONGOING
+  SUBMITTED
+  EXPIRED
+}
+
+enum PeriodType {
+  SEMESTER_1
+  SEMESTER_2
+  UTS
+  UAS
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum SettingType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+}
+
+// ---------- TENANT (Sekolah) ----------
+model School {
+  id            String           @id @default(cuid())
+  name          String
+  code          String           @unique
+  logoUrl       String?
+  isActive      Boolean          @default(true)
+  createdAt     DateTime         @default(now())
+
+  settings      SchoolSetting[]
+  academicYears AcademicYear[]
+  periods       Period[]
+  departments   Department[]
+  classes       Class[]
+  subjects      Subject[]
+  rooms         Room[]
+  users         UserSchool[]
+  roles         Role[]
+  questions     Question[]
+  exams         Exam[]
+  attempts      Attempt[]
+  userRoles     UserRole[]
+}
+
+model SchoolSetting {
+  id        String      @id @default(cuid())
+  schoolId  String
+  school    School      @relation(fields: [schoolId], references: [id])
+  key       String
+  type      SettingType @default(STRING)
+  value     String
+  updatedAt DateTime    @default(now())
+
+  @@unique([schoolId, key])
+}
+
+// ---------- Tahun Ajaran & Periode ----------
+model AcademicYear {
+  id        String    @id @default(cuid())
+  schoolId  String
+  school    School    @relation(fields: [schoolId], references: [id])
+  label     String
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean   @default(false)
+
+  periods   Period[]
+  exams     Exam[]
+}
+
+model Period {
+  id             String      @id @default(cuid())
+  schoolId       String
+  school         School      @relation(fields: [schoolId], references: [id])
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  type           PeriodType
+  startDate      DateTime
+  endDate        DateTime
+  isActive       Boolean     @default(false)
+
+  exams          Exam[]
+}
+
+// ---------- User & Membership ----------
+model User {
+  id            String        @id @default(cuid())
+  name          String
+  email         String        @unique
+  passwordHash  String
+  type          UserType      @default(SISWA)
+  isSuperAdmin  Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+
+  schools       UserSchool[]
+  attempts      Attempt[]
+  createdQuestions Question[] @relation("QuestionCreatedBy")
+  createdExams  Exam[]        @relation("ExamCreatedBy")
+  examSupervisions ExamSupervisor[]
+  userRoles     UserRole[]
+  auditLogs     AuditLog[]
+}
+
+model UserSchool {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  schoolId  String
+  school    School  @relation(fields: [schoolId], references: [id])
+
+  classId   String?
+  class     Class?  @relation("ClassStudents", fields: [classId], references: [id])
+
+  isActive  Boolean @default(true)
+  roles     UserRole[]
+}
+
+// ---------- ACL ----------
+model Role {
+  id        String     @id @default(cuid())
+  name      String
+  key       String
+  scope     RoleScope  @default(SCHOOL)
+  schoolId  String?
+  school    School?    @relation(fields: [schoolId], references: [id])
+  isSystem  Boolean    @default(false)
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+  roleMenus       RoleMenu[]
+
+  @@unique([key, schoolId])
+}
+
+model Permission {
+  id        String   @id @default(cuid())
+  name      String
+  action    String
+  resource  String
+
+  rolePermissions RolePermission[]
+
+  @@unique([action, resource])
+}
+
+model RolePermission {
+  id           String      @id @default(cuid())
+  roleId       String
+  role         Role        @relation(fields: [roleId], references: [id])
+  permissionId String
+  permission   Permission  @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+}
+
+model UserRole {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id])
+  roleId   String
+  role     Role     @relation(fields: [roleId], references: [id])
+  schoolId String?
+  school   School?  @relation(fields: [schoolId], references: [id])
+
+  // Link to membership in a specific school (optional)
+  userSchoolId String?
+  userSchool   UserSchool? @relation(fields: [userSchoolId], references: [id])
+}
+
+model Menu {
+  id         String     @id @default(cuid())
+  name       String
+  key        String     @unique
+  path       String
+  icon       String?
+  order      Int        @default(0)
+  parentId   String?
+  parent     Menu?      @relation("MenuParent", fields: [parentId], references: [id])
+  children   Menu[]     @relation("MenuParent")
+  visibility Visibility @default(PUBLIC)
+  isActive   Boolean    @default(true)
+
+  roleMenus  RoleMenu[]
+}
+
+model RoleMenu {
+  id     String @id @default(cuid())
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id])
+  menuId String
+  menu   Menu   @relation(fields: [menuId], references: [id])
+
+  @@unique([roleId, menuId])
+}
+
+// ---------- Master Akademik ----------
+model Department {
+  id        String   @id @default(cuid())
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  name      String   // IPA, IPS, TKJ, Akuntansi
+  level     String?  // SMA/SMK
+  isActive  Boolean  @default(true)
+
+  classes   Class[]
+  subjects  Subject[]
+}
+
+model Class {
+  id         String   @id @default(cuid())
+  schoolId   String
+  school     School   @relation(fields: [schoolId], references: [id])
+  departmentId String?
+  department Department? @relation(fields: [departmentId], references: [id])
+  name       String   // "XII IPA A"
+  grade      Int      // 10,11,12
+  isActive   Boolean  @default(true)
+
+  students   UserSchool[] @relation("ClassStudents")
+  exams      Exam[]
+}
+
+model Room {
+  id        String   @id @default(cuid())
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  name      String   // "Lab Komputer 1"
+  capacity  Int?
+  isActive  Boolean  @default(true)
+
+  examRooms ExamRoom[]
+}
+
+model Subject {
+  id          String   @id @default(cuid())
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id])
+  departmentId String?
+  department  Department? @relation(fields: [departmentId], references: [id])
+  grade       Int?     // null kalau berlaku umum
+  name        String
+
+  questions   Question[]
+  exams       Exam[]
+}
+
+// ---------- CBT ----------
+model Question {
+  id          String   @id @default(cuid())
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id])
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+  type        QType
+  text        String
+  options     Json?
+  correctKey  String?
+  points      Int      @default(1)
+  difficulty  Int      @default(1)
+  createdById String
+  createdBy   User     @relation("QuestionCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  isArchived  Boolean  @default(false)
+
+  examQuestions ExamQuestion[]
+}
+
+model Exam {
+  id              String     @id @default(cuid())
+  schoolId        String
+  school          School     @relation(fields: [schoolId], references: [id])
+  title           String
+  subjectId       String
+  subject         Subject    @relation(fields: [subjectId], references: [id])
+  classId         String
+  class           Class      @relation(fields: [classId], references: [id])
+  academicYearId  String
+  academicYear    AcademicYear @relation(fields: [academicYearId], references: [id])
+  periodId        String
+  period          Period     @relation(fields: [periodId], references: [id])
+  durationMinutes Int
+  startAt         DateTime
+  endAt           DateTime
+  randomizeQs     Boolean    @default(true)
+  randomizeOpts   Boolean    @default(true)
+  totalQuestions  Int
+  createdById     String
+  createdBy       User       @relation("ExamCreatedBy", fields: [createdById], references: [id])
+  published       Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+
+  examQuestions   ExamQuestion[]
+  examRooms       ExamRoom[]
+  attempts        Attempt[]
+}
+
+model ExamRoom {
+  id      String @id @default(cuid())
+  examId  String
+  exam    Exam   @relation(fields: [examId], references: [id])
+  roomId  String
+  room    Room   @relation(fields: [roomId], references: [id])
+
+  token   ExamToken?
+  supervisors ExamSupervisor[]
+}
+
+model ExamToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  examRoomId String   @unique
+  examRoom   ExamRoom @relation(fields: [examRoomId], references: [id])
+  
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  isActive  Boolean  @default(true)
+}
+
+model ExamSupervisor {
+  id        String   @id @default(cuid())
+  examRoomId String
+  examRoom   ExamRoom @relation(fields: [examRoomId], references: [id])
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model ExamQuestion {
+  id             String   @id @default(cuid())
+  examId         String
+  exam           Exam     @relation(fields: [examId], references: [id])
+  questionId     String
+  question       Question @relation(fields: [questionId], references: [id])
+  order          Int
+  optionsShuffled Json?
+}
+
+model Attempt {
+  id          String        @id @default(cuid())
+  schoolId    String
+  school      School        @relation(fields: [schoolId], references: [id])
+  examId      String
+  exam        Exam          @relation(fields: [examId], references: [id])
+  studentId   String
+  student     User          @relation(fields: [studentId], references: [id])
+  startedAt   DateTime      @default(now())
+  endsAt      DateTime
+  status      AttemptStatus @default(ONGOING)
+  questionOrder Json?
+  autoScore   Int           @default(0)
+  manualScore Int           @default(0)
+  finalScore  Int           @default(0)
+  submittedAt DateTime?
+
+  answers     Answer[]
+}
+
+model Answer {
+  id         String   @id @default(cuid())
+  attemptId  String
+  attempt    Attempt  @relation(fields: [attemptId], references: [id])
+  questionId String
+  choiceKey  String?
+  essayText  String?
+  isCorrect  Boolean?
+  points     Int      @default(0)
+  updatedAt  DateTime @default(now())
+}
+
+// ---------- Audit Log ----------
+model AuditLog {
+  id        String   @id @default(cuid())
+  schoolId  String?
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  action    String
+  resource  String?
+  resourceId String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
