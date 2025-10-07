@@ -48,7 +48,7 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
           <ThemeSwitch />
         </NavbarItem>
         <NavbarItem>
-          <Dropdown placement="bottom-end">
+          <Dropdown showArrow placement="bottom-end">
             <DropdownTrigger>
               <Avatar
                 isBordered
@@ -58,7 +58,7 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
                 className="cursor-pointer hover:opacity-90 transition-all"
               />
             </DropdownTrigger>
-            <DropdownMenu aria-label="User menu" variant="flat" className="w-48">
+            <DropdownMenu aria-label="User menu" variant="flat">
               <DropdownItem key="profile" textValue="Profile">
                 <div className="flex flex-col">
                   <span className="font-medium">Koalawan</span>

@@ -14,11 +14,11 @@ export default function LoginPage() {
   return (
     <div className="flex h-screen w-full bg-koala-mint/20 dark:bg-default-100/20">
       {/* 🐨 Left Side Illustration */}
-      <div className="hidden lg:flex flex-1 items-center justify-center bg-white dark:bg-default-100/10">
+      <div className="hidden lg:flex flex-1 items-center justify-center bg-white dark:bg-default-100/10 overflow-hidden">
         <img
           src="/koala-login-illustration.png"
           alt="Koala chill coding"
-          className="object-contain"
+          className="w-full h-full object-cover"
         />
       </div>
 
@@ -36,8 +36,8 @@ export default function LoginPage() {
             <Input
               label="Email atau Username"
               placeholder="Masukkan email atau username"
-              variant="bordered"
-              color="primary"
+              variant="flat"
+              // color="primary"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               startContent={<FiMail className="text-default-400" />}
@@ -47,8 +47,8 @@ export default function LoginPage() {
             <Input
               label="Password"
               placeholder="Masukkan password"
-              variant="bordered"
-              color="primary"
+              variant="flat"
+              // color="primary"
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
