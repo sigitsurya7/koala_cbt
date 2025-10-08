@@ -73,6 +73,9 @@ model School {
   exams         Exam[]
   attempts      Attempt[]
   userRoles     UserRole[]
+  studentDetails StudentDetail[] @relation("SchoolStudentDetails")
+  teacherDetails TeacherDetail[] @relation("SchoolTeacherDetails")
+  staffDetails   StaffDetail[]   @relation("SchoolStaffDetails")
 }
 
 model SchoolSetting {
@@ -132,6 +135,10 @@ model User {
   examSupervisions ExamSupervisor[]
   userRoles     UserRole[]
   auditLogs     AuditLog[]
+  userDetail    UserDetail?
+  studentDetail StudentDetail?
+  teacherDetail TeacherDetail?
+  staffDetail   StaffDetail?
 }
 
 model UserSchool {
@@ -212,6 +219,7 @@ model Menu {
   children   Menu[]     @relation("MenuParent")
   visibility Visibility @default(PUBLIC)
   isActive   Boolean    @default(true)
+  menuSuperAdmin Boolean @default(false)
 
   roleMenus  RoleMenu[]
 }
@@ -237,6 +245,7 @@ model Department {
 
   classes   Class[]
   subjects  Subject[]
+  studentDetails StudentDetail[] @relation("DepartmentStudentDetails")
 }
 
 model Class {
@@ -251,6 +260,7 @@ model Class {
 
   students   UserSchool[] @relation("ClassStudents")
   exams      Exam[]
+  studentDetails StudentDetail[] @relation("ClassStudentDetails")
 }
 
 model Room {
@@ -275,6 +285,7 @@ model Subject {
 
   questions   Question[]
   exams       Exam[]
+  teacherDetails TeacherDetail[] @relation("SubjectTeacherDetails")
 }
 
 // ---------- CBT ----------
@@ -413,4 +424,74 @@ model AuditLog {
   resourceId String?
   metadata  Json?
   createdAt DateTime @default(now())
+}
+
+// ---------- User Details ----------
+model UserDetail {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+
+  fullName   String
+  gender     String?
+  birthPlace String?
+  birthDate  DateTime?
+  phone      String?
+  address    String?
+  religion   String?
+  avatarUrl  String?
+  createdAt  DateTime @default(now())
+}
+
+model StudentDetail {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id])
+  nis          String?
+  nisn         String?
+  schoolId     String
+  school       School   @relation("SchoolStudentDetails", fields: [schoolId], references: [id])
+  classId      String?
+  class        Class?   @relation("ClassStudentDetails", fields: [classId], references: [id])
+  departmentId String?
+  department   Department? @relation("DepartmentStudentDetails", fields: [departmentId], references: [id])
+  entryYear    Int?
+  status       String?
+  guardianName  String?
+  guardianPhone String?
+  guardianJob   String?
+  address      String?
+  createdAt    DateTime @default(now())
+}
+
+model TeacherDetail {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+  schoolId   String
+  school     School   @relation("SchoolTeacherDetails", fields: [schoolId], references: [id])
+  nip        String?
+  nuptk      String?
+  subjectId  String?
+  subject    Subject? @relation("SubjectTeacherDetails", fields: [subjectId], references: [id])
+  position   String?
+  education  String?
+  phone      String?
+  address    String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+}
+
+model StaffDetail {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+  schoolId   String
+  school     School   @relation("SchoolStaffDetails", fields: [schoolId], references: [id])
+  nip        String?
+  position   String?
+  phone      String?
+  address    String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
 }

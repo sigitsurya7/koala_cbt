@@ -14,12 +14,33 @@ import {
   NavbarBrand,
 } from "@heroui/react";
 import { FiLogOut, FiMenu, FiSettings } from "react-icons/fi";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
+import { useAuth } from "@/stores/useAuth";
+import { useApp } from "@/stores/useApp";
 
 type NavbarKoalaProps = {
   onToggleSidebar?: () => void;
 };
 
 export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
+  const router = useRouter();
+  const { logout } = useAuth();
+  const app = useApp();
+
+  const handleAction = async (key: any) => {
+    try {
+      if (key === "logout") {
+        await logout();
+        toast.success("Berhasil logout");
+        router.push("/login");
+      } else if (key === "settings") {
+        router.push("/settings/menu");
+      }
+    } catch (e: any) {
+      toast.error("Gagal memproses aksi");
+    }
+  };
   return (
     <Navbar
       isBordered
@@ -45,6 +66,28 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
 
       <NavbarContent justify="end">
         <NavbarItem>
+          {/* School picker (if multiple) */}
+          {app.schools && app.schools.length > 0 && (
+            <Dropdown>
+              <DropdownTrigger>
+                <Button variant="light" aria-label="Pilih sekolah" className="focus-visible:ring-2">
+                  {app.schools.find((s) => s.id === app.activeSchoolId)?.code || app.schools[0]?.code || "SEKOLAH"}
+                </Button>
+              </DropdownTrigger>
+              <DropdownMenu aria-label="Daftar Sekolah" onAction={async (key) => {
+                await app.setActiveSchool(String(key));
+                toast.success("Sekolah aktif diperbarui");
+              }}>
+                {app.schools.map((s) => (
+                  <DropdownItem key={s.id} textValue={s.name} aria-label={`Pilih ${s.name}`}>
+                    {s.name} ({s.code})
+                  </DropdownItem>
+                ))}
+              </DropdownMenu>
+            </Dropdown>
+          )}
+        </NavbarItem>
+        <NavbarItem>
           <ThemeSwitch />
         </NavbarItem>
         <NavbarItem>
@@ -58,7 +101,7 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
                 className="cursor-pointer hover:opacity-90 transition-all"
               />
             </DropdownTrigger>
-            <DropdownMenu aria-label="User menu" variant="flat">
+            <DropdownMenu aria-label="User menu" variant="flat" onAction={handleAction}>
               <DropdownItem key="profile" textValue="Profile">
                 <div className="flex flex-col">
                   <span className="font-medium">Koalawan</span>

@@ -4,19 +4,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@heroui/react";
 import type { IconType } from "react-icons";
-import {
-  FiChevronRight,
-  FiHome,
-  FiCheckSquare,
-  FiSettings,
-  FiUsers,
-  FiLayers,
-  FiCalendar,
-  FiFileText,
-} from "react-icons/fi";
+import { FiChevronRight } from "react-icons/fi";
+import * as FiIcons from "react-icons/fi";
+import * as FaIcons from "react-icons/fa";
+import * as MdIcons from "react-icons/md";
+import * as RiIcons from "react-icons/ri";
+import * as HiIcons from "react-icons/hi2";
+import * as BiIcons from "react-icons/bi";
+import * as BsIcons from "react-icons/bs";
+import * as PiIcons from "react-icons/pi";
+import * as TbIcons from "react-icons/tb";
+import * as LuIcons from "react-icons/lu";
+import * as Io5Icons from "react-icons/io5";
 import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
 import { useAuth } from "@/stores/useAuth";
+import { useMenu } from "@/stores/useMenu";
 
 type MenuItem = {
   name: string;
@@ -38,15 +40,28 @@ type ApiMenuNode = {
   children: ApiMenuNode[];
 };
 
-const iconMap: Record<string, IconType> = {
-  FiHome,
-  FiUsers,
-  FiLayers,
-  FiCheckSquare,
-  FiSettings,
-  FiCalendar,
-  FiFileText,
-};
+const PACKS: Array<Record<string, IconType>> = [
+  FiIcons as unknown as Record<string, IconType>,
+  FaIcons as unknown as Record<string, IconType>,
+  MdIcons as unknown as Record<string, IconType>,
+  RiIcons as unknown as Record<string, IconType>,
+  HiIcons as unknown as Record<string, IconType>,
+  BiIcons as unknown as Record<string, IconType>,
+  BsIcons as unknown as Record<string, IconType>,
+  PiIcons as unknown as Record<string, IconType>,
+  TbIcons as unknown as Record<string, IconType>,
+  LuIcons as unknown as Record<string, IconType>,
+  Io5Icons as unknown as Record<string, IconType>,
+];
+
+function resolveIcon(name?: string | null): IconType | undefined {
+  if (!name) return undefined;
+  for (const pack of PACKS) {
+    const C = (pack as any)[name];
+    if (C) return C as IconType;
+  }
+  return undefined;
+}
 
 type SidebarKoalaProps = {
   collapsed?: boolean;
@@ -61,8 +76,8 @@ export default function SidebarKoala({
 }: SidebarKoalaProps) {
   const pathname = usePathname();
   const { user } = useAuth();
-
-  const [menu, setMenu] = useState<MenuItem[]>([]);
+  const menuStore = useMenu();
+  const menu = menuStore.menu as MenuItem[];
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   const isItemActive = useMemo(
@@ -87,39 +102,8 @@ export default function SidebarKoala({
   }, [isItemActive, menu]);
 
   useEffect(() => {
-    const mapNode = (node: ApiMenuNode): MenuItem => ({
-      name: node.name,
-      path: node.path,
-      icon: node.icon ? iconMap[node.icon] : undefined,
-      needLogin: node.needLogin,
-      children: node.children?.map(mapNode) ?? [],
-    });
-
-    const filterByAuth = (items: MenuItem[], loggedIn: boolean): MenuItem[] => {
-      const result: MenuItem[] = [];
-      for (const it of items) {
-        if (it.needLogin && !loggedIn) continue;
-        const children = it.children ? filterByAuth(it.children, loggedIn) : [];
-        result.push({ ...it, children });
-      }
-      return result;
-    };
-
-    axios
-      .get<{ menu: ApiMenuNode[] }>("/api/menu")
-      .then((res) => {
-        const mapped = res.data.menu.map(mapNode);
-        const filtered = filterByAuth(mapped, !!user);
-        setMenu(filtered);
-      })
-      .catch(() => {
-        // Fallback default minimal menu
-        setMenu([
-          { name: "Dashboard", path: "/dashboard", icon: FiHome },
-          { name: "Pengaturan", path: "/settings", icon: FiSettings },
-        ]);
-      });
-  }, [user]);
+    menuStore.connect();
+  }, [menuStore]);
 
   const toggleGroup = (name: string) =>
     setOpenGroups((prev) => ({ ...prev, [name]: !prev[name] }));
@@ -136,9 +120,9 @@ export default function SidebarKoala({
             type="button"
             onClick={() => toggleGroup(item.name)}
             className={cn(
-              "w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all",
+              "w-full flex cursor-pointer items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all",
               active
-                ? "bg-primary/20 text-primary shadow-koala-soft"
+                ? "bg-primary shadow-koala-soft"
                 : "hover:bg-default-100/50 dark:hover:bg-default-100/20",
               collapsed && "justify-center",
             )}
@@ -147,8 +131,15 @@ export default function SidebarKoala({
             {!collapsed && (
               <span className="flex-1 text-left truncate">{item.name}</span>
             )}
-            {!collapsed && (
+            {!collapsed && !isOpen ? (
               <FiChevronRight
+                className={cn(
+                  "transition-transform duration-200 text-base",
+                  isOpen ? "rotate-90" : "rotate-0",
+                )}
+              />
+            ) : (
+              <FiIcons.FiChevronDown
                 className={cn(
                   "transition-transform duration-200 text-base",
                   isOpen ? "rotate-90" : "rotate-0",
@@ -173,7 +164,7 @@ export default function SidebarKoala({
         className={cn(
           "flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all",
           active
-            ? "bg-primary/20 text-primary shadow-koala-soft"
+            ? "bg-primary shadow-koala-soft"
             : "hover:bg-default-100/50 dark:hover:bg-default-100/20",
           collapsed && "justify-center",
         )}
