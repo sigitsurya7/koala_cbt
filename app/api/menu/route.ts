@@ -5,6 +5,7 @@ import { emitMenuUpdated } from "@/lib/events";
 import { buildSearchWhere, pageToSkipTake, parsePageQuery } from "@/lib/pagination";
 import { requirePermission } from "@/lib/acl";
 import { ACCESS_COOKIE, verifyAccessToken } from "@/lib/auth";
+import { ACTIVE_SCHOOL_COOKIE } from "@/lib/app";
 
 type MenuNode = {
   id: string;
@@ -79,6 +80,7 @@ export async function GET(req: NextRequest) {
 
   // Default: hierarchical nodes for sidebar
   let isSuper = false;
+  let activeSchoolId: string | null = null;
   try {
     const token = req.cookies.get(ACCESS_COOKIE)?.value;
     const payload = token ? await verifyAccessToken(token) : null;
@@ -86,6 +88,7 @@ export async function GET(req: NextRequest) {
       const u = await prisma.user.findUnique({ where: { id: payload.sub }, select: { isSuperAdmin: true } });
       isSuper = !!u?.isSuperAdmin;
     }
+    activeSchoolId = req.cookies.get(ACTIVE_SCHOOL_COOKIE)?.value || null;
   } catch {}
 
   const baseWhere: any = { isActive: true, menuSuperAdmin: isSuper ? true : false };
@@ -101,7 +104,7 @@ export async function GET(req: NextRequest) {
     const token = req.cookies.get(ACCESS_COOKIE)?.value;
     const payload = token ? await verifyAccessToken(token) : null;
     if (payload) {
-      const userRoles = await prisma.userRole.findMany({ where: { userId: payload.sub }, select: { roleId: true } });
+      const userRoles = await prisma.userRole.findMany({ where: { userId: payload.sub, OR: [{ schoolId: activeSchoolId }, { schoolId: null }] }, select: { roleId: true } });
       const roleIds = new Set(userRoles.map((r) => r.roleId));
       // We will include node if it has mapping OR any child mapped; build after tree build
     }
@@ -142,7 +145,7 @@ export async function GET(req: NextRequest) {
     const token = req.cookies.get(ACCESS_COOKIE)?.value;
     const payload = token ? await verifyAccessToken(token) : null;
     if (payload) {
-      const userRoles = await prisma.userRole.findMany({ where: { userId: payload.sub }, select: { roleId: true } });
+      const userRoles = await prisma.userRole.findMany({ where: { userId: payload.sub, OR: [{ schoolId: activeSchoolId }, { schoolId: null }] }, select: { roleId: true } });
       const roleIdSet = new Set(userRoles.map((r) => r.roleId));
       const mapped = new Set<string>();
       for (const m of items) {

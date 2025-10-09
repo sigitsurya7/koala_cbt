@@ -23,14 +23,14 @@ export default function WithUILayout({ children }: { children: React.ReactNode }
       </Drawer>
 
       {/* Area kanan: navbar + content */}
-      <div className="flex-1 ml-0 lg:ml-64 relative flex flex-col">
+      <div className="flex-1 ml-0 lg:ml-64 relative flex flex-col min-w-0">
         {/* Navbar */}
         <div className="sticky top-4 z-30 mx-8">
           <NavbarKoala onToggleSidebar={onOpen} />
         </div>
 
         {/* Content area */}
-        <main className="flex-1 overflow-y-auto px-8 pb-8 pt-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 lg:px-8 pb-8 pt-6 min-w-0">
           <div className="p-6">
             {children}
           </div>
@@ -39,4 +39,3 @@ export default function WithUILayout({ children }: { children: React.ReactNode }
     </div>
   );
 }
-

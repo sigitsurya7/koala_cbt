@@ -74,7 +74,7 @@ export default function UserManagementPage() {
         }}
         toolbarRight={
           <div className="flex gap-2">
-            <Button startContent={<FiDownload />} variant="flat" onPress={async () => {
+            <Button startContent={<FiDownload />} color="success" variant="flat" onPress={async () => {
               try {
                 toast.loading("Menyiapkan template...", { id: "dl" });
                 // Prompt user to choose sekolah dalam modal import agar kita tahu schoolId
@@ -84,7 +84,7 @@ export default function UserManagementPage() {
                 toast.dismiss("dl");
               }
             }}>Download Template</Button>
-            <Button startContent={<FiUpload />} variant="flat" onPress={() => setImportOpen(true)}>Import Data</Button>
+            <Button startContent={<FiUpload />} color="secondary" variant="flat" onPress={() => setImportOpen(true)}>Import Data</Button>
             <Button color="primary" startContent={<FiPlus />} onPress={openCreate}>Tambah User</Button>
           </div>
         }

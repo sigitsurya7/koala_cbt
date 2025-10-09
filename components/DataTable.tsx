@@ -104,55 +104,56 @@ export default function DataTable<T>({
               >
                 {(item) => <SelectItem key={item.key}>{item.label}</SelectItem>}
               </Select>
-              <span className="text-xs opacity-70">/ halaman</span>
             </div>
           </div>
           <div className="flex items-center gap-2">{toolbarRight}</div>
         </div>
 
-        <Table aria-label="Data table" removeWrapper className="min-w-full" aria-busy={loading}>
-          <TableHeader>
-            {columns.map((c) => (
-              <TableColumn key={c.key} className={c.className} aria-sort={sortKey === c.key ? (order === "asc" ? "ascending" : "descending") : "none"}>
-                {c.sortable ? (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 focus-visible:ring-2 rounded-md"
-                    aria-label={`Urutkan kolom ${c.header}`}
-                    onClick={() => {
-                      if (sortKey === c.key) setOrder(order === "asc" ? "desc" : "asc");
-                      else { setSortKey(c.key); setOrder("asc"); }
-                    }}
-                  >
-                    {c.header}
-                    {sortKey === c.key ? (order === "asc" ? " ▲" : " ▼") : ""}
-                  </button>
-                ) : c.header}
-              </TableColumn>
-            ))}
-          </TableHeader>
-          {loading ? (
-            <TableBody items={Array.from({ length: 5 }).map((_, i) => ({ __k: String(i) })) as any}>
-              {(it: any) => (
-                <TableRow key={it.__k}>
-                  {columns.map((c) => (
-                    <TableCell key={c.key}><Skeleton className="h-4 w-full" /></TableCell>
-                  ))}
-                </TableRow>
-              )}
-            </TableBody>
-          ) : (
-            <TableBody items={items} emptyContent={"Tidak ada data"}>
-              {(item) => (
-                <TableRow key={rowKey(item)}>
-                  {columns.map((c) => (
-                    <TableCell key={c.key}>{c.render ? c.render(item) : (item as any)[c.key]}</TableCell>
-                  ))}
-                </TableRow>
-              )}
-            </TableBody>
-          )}
-        </Table>
+        <div className="w-full overflow-x-auto">
+          <Table aria-label="Data table" removeWrapper className="min-w-full" aria-busy={loading}>
+            <TableHeader>
+              {columns.map((c) => (
+                <TableColumn key={c.key} className={c.className} aria-sort={sortKey === c.key ? (order === "asc" ? "ascending" : "descending") : "none"}>
+                  {c.sortable ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 focus-visible:ring-2 rounded-md"
+                      aria-label={`Urutkan kolom ${c.header}`}
+                      onClick={() => {
+                        if (sortKey === c.key) setOrder(order === "asc" ? "desc" : "asc");
+                        else { setSortKey(c.key); setOrder("asc"); }
+                      }}
+                    >
+                      {c.header}
+                      {sortKey === c.key ? (order === "asc" ? " ▲" : " ▼") : ""}
+                    </button>
+                  ) : c.header}
+                </TableColumn>
+              ))}
+            </TableHeader>
+            {loading ? (
+              <TableBody items={Array.from({ length: 5 }).map((_, i) => ({ __k: String(i) })) as any}>
+                {(it: any) => (
+                  <TableRow key={it.__k}>
+                    {columns.map((c) => (
+                      <TableCell key={c.key}><Skeleton className="h-4 w-full" /></TableCell>
+                    ))}
+                  </TableRow>
+                )}
+              </TableBody>
+            ) : (
+              <TableBody items={items} emptyContent={"Tidak ada data"}>
+                {(item) => (
+                  <TableRow key={rowKey(item)}>
+                    {columns.map((c) => (
+                      <TableCell key={c.key}>{c.render ? c.render(item) : (item as any)[c.key]}</TableCell>
+                    ))}
+                  </TableRow>
+                )}
+              </TableBody>
+            )}
+          </Table>
+        </div>
 
         <div className="flex items-center justify-between">
           <div className="text-xs opacity-70">

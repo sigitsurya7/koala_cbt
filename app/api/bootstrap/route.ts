@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
-    select: { id: true, name: true, email: true, type: true, isSuperAdmin: true },
+    select: { id: true, name: true, email: true, type: true, isSuperAdmin: true, userDetail: { select: { avatarUrl: true } } },
   });
   if (!user) return NextResponse.json({ user: null }, { status: 401 });
 
@@ -33,11 +33,10 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json({
-    user,
+    user: { id: user.id, name: user.name, email: user.email, type: user.type, isSuperAdmin: user.isSuperAdmin, userDetail: user.userDetail },
     schools: schoolList,
     activeSchoolId,
     roles: roles.map((r) => ({ id: r.role.id, name: r.role.name, key: r.role.key, scope: r.role.scope })),
     permissions: permissions.map((rp) => ({ action: rp.permission.action, resource: rp.permission.resource })),
   });
 }
-

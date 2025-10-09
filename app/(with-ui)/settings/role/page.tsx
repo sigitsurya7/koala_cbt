@@ -30,9 +30,9 @@ export default function RoleSettingsPage() {
         externalReloadKey={reloadKey}
         searchPlaceholder="Cari role by nama atau key..."
         columns={[
-          { key: "name", header: "Nama" },
-          { key: "key", header: "Key", render: (r) => <span className="font-mono text-xs">{r.key}</span> },
-          { key: "scope", header: "Scope", render: (r) => (<Chip size="sm" variant="flat">{r.scope}</Chip>) },
+          { key: "name", header: "Nama", sortable: true },
+          { key: "key", header: "Key", sortable: true, render: (r) => <span className="font-mono text-xs">{r.key}</span> },
+          { key: "scope", header: "Scope", sortable: true, render: (r) => (<Chip size="sm" variant="flat">{r.scope}</Chip>) },
           { key: "schoolName", header: "Sekolah", render: (r) => <span className="text-xs">{r.schoolName || "-"}</span> },
           {
             key: "actions",

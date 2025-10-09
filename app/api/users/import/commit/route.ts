@@ -8,6 +8,7 @@ type Item = {
   fullName: string;
   nis: string;
   email: string;
+  username: string;
   passwordPlain: string;
   schoolId: string;
   classId?: string | null;
@@ -31,12 +32,15 @@ export async function POST(req: NextRequest) {
   if (items.length === 0) return NextResponse.json({ message: "items kosong" }, { status: 400 });
 
   try {
+    let failureIndex = -1;
     const count = await prisma.$transaction(async (tx) => {
       let inserted = 0;
-      for (const it of items) {
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        failureIndex = i;
         const hash = await bcrypt.hash(it.passwordPlain, 10);
         const user = await tx.user.create({
-          data: { name: it.fullName, email: it.email, passwordHash: hash, type: "SISWA" },
+          data: { name: it.fullName, email: it.email, username: it.username, passwordHash: hash, type: "SISWA" },
         });
         await tx.userDetail.create({ data: { userId: user.id, fullName: it.fullName, gender: it.gender ?? undefined, birthPlace: it.birthPlace ?? undefined, birthDate: it.birthDate ? new Date(it.birthDate) : undefined, phone: null, address: it.address ?? undefined, religion: null, avatarUrl: null } });
         await tx.studentDetail.create({
@@ -57,10 +61,10 @@ export async function POST(req: NextRequest) {
         inserted++;
       }
       return inserted;
-    });
+    }, { timeout: 120_000, maxWait: 10_000 });
     return NextResponse.json({ ok: true, inserted: count, failed: 0 });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, message: e?.message ?? "Gagal import" }, { status: 400 });
+    // Failure index is zero-based; csv-like row ~ index + 2 (with header)
+    return NextResponse.json({ ok: false, message: e?.message ?? "Gagal import", failedIndex: (typeof failureIndex === 'number' && failureIndex >= 0) ? failureIndex : null }, { status: 400 });
   }
 }
-

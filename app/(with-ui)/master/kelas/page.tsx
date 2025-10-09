@@ -5,7 +5,8 @@ import axios from "axios";
 import { Button, Input, Select, SelectItem, Switch, Chip } from "@heroui/react";
 import DataTable, { type FetchParams, type Paged } from "@/components/DataTable";
 import ConfirmModal from "@/components/ConfirmModal";
-import { FiEdit, FiPlus, FiTrash } from "react-icons/fi";
+import { FiEdit, FiPlus, FiTrash, FiUsers } from "react-icons/fi";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
 type School = { id: string; name: string; code: string };
@@ -13,6 +14,7 @@ type Department = { id: string; name: string };
 type ClassRow = { id: string; schoolId: string; departmentId?: string | null; departmentName?: string | null; name: string; grade: number; isActive: boolean };
 
 export default function ClassesPage() {
+  const router = useRouter();
   const [schools, setSchools] = useState<School[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [schoolId, setSchoolId] = useState<string>("");
@@ -83,6 +85,7 @@ export default function ClassesPage() {
             { key: "actions", header: "Aksi", render: (d) => (
               <div className="flex gap-2">
                 <Button size="sm" startContent={<FiEdit />} variant="flat" onPress={() => openEdit(d)}>Edit</Button>
+                <Button size="sm" startContent={<FiUsers />} color="secondary" variant="flat" onPress={() => router.push(`/master/kelas/${d.id}/students`)}>Siswa</Button>
                 <Button size="sm" startContent={<FiTrash />} color="danger" variant="flat" onPress={() => askRemove(d)}>Hapus</Button>
               </div>
             ) },

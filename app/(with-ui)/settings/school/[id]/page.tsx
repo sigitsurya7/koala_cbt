@@ -8,6 +8,8 @@ import DataTable, { type FetchParams, type Paged } from "@/components/DataTable"
 import AcademicYearModal from "./components/AcademicYearModal";
 import SchoolSettingModal from "./components/SchoolSettingModal";
 import PeriodModal from "./components/PeriodModal";
+import ConfirmModal from "@/components/ConfirmModal";
+import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
 type School = { id: string; name: string; code: string; logoUrl?: string | null; isActive: boolean };
@@ -27,12 +29,15 @@ export default function SchoolDetailPage() {
 
   const [ayOpen, setAyOpen] = useState(false);
   const [ayEditing, setAyEditing] = useState<AcademicYear | null>(null);
+  const [ayConfirm, setAyConfirm] = useState<{ open: boolean; target?: AcademicYear | null }>({ open: false });
 
   const [ssOpen, setSsOpen] = useState(false);
   const [ssEditing, setSsEditing] = useState<SchoolSetting | null>(null);
+  const [ssConfirm, setSsConfirm] = useState<{ open: boolean; target?: SchoolSetting | null }>({ open: false });
 
   const [pdOpen, setPdOpen] = useState(false);
   const [pdEditing, setPdEditing] = useState<Period | null>(null);
+  const [pdConfirm, setPdConfirm] = useState<{ open: boolean; target?: Period | null }>({ open: false });
 
   const [ayList, setAyList] = useState<Array<{ id: string; label: string }>>([]);
 
@@ -86,6 +91,7 @@ export default function SchoolDetailPage() {
               { key: "actions", header: "Aksi", render: (i) => (
                 <div className="flex gap-2">
                   <Button size="sm" variant="flat" onPress={() => { setAyEditing(i); setAyOpen(true); }}>Edit</Button>
+                  <Button size="sm" color="danger" variant="flat" onPress={() => setAyConfirm({ open: true, target: i })}>Hapus</Button>
                 </div>
               ) },
             ]}
@@ -113,6 +119,7 @@ export default function SchoolDetailPage() {
               { key: "actions", header: "Aksi", render: (i) => (
                 <div className="flex gap-2">
                   <Button size="sm" variant="flat" onPress={() => { setSsEditing(i); setSsOpen(true); }}>Edit</Button>
+                  <Button size="sm" color="danger" variant="flat" onPress={() => setSsConfirm({ open: true, target: i })}>Hapus</Button>
                 </div>
               ) },
             ]}
@@ -141,6 +148,7 @@ export default function SchoolDetailPage() {
               { key: "actions", header: "Aksi", render: (i) => (
                 <div className="flex gap-2">
                   <Button size="sm" variant="flat" onPress={() => { setPdEditing(i); setPdOpen(true); }}>Edit</Button>
+                  <Button size="sm" color="danger" variant="flat" onPress={() => setPdConfirm({ open: true, target: i })}>Hapus</Button>
                 </div>
               ) },
             ]}
@@ -156,6 +164,58 @@ export default function SchoolDetailPage() {
       <AcademicYearModal isOpen={ayOpen} onOpenChange={setAyOpen} onSaved={() => setReloadAY((k) => k + 1)} schoolId={schoolId} initial={ayEditing} />
       <SchoolSettingModal isOpen={ssOpen} onOpenChange={setSsOpen} onSaved={() => setReloadSS((k) => k + 1)} schoolId={schoolId} initial={ssEditing} />
       <PeriodModal isOpen={pdOpen} onOpenChange={setPdOpen} onSaved={() => setReloadPD((k) => k + 1)} schoolId={schoolId} academicYears={ayList} initial={pdEditing} />
+
+      <ConfirmModal
+        isOpen={ayConfirm.open}
+        onOpenChange={(v) => setAyConfirm({ open: v, target: v ? ayConfirm.target : null })}
+        title="Hapus Tahun Ajaran"
+        description={ayConfirm.target ? `Yakin hapus TA "${ayConfirm.target.label}"?` : undefined}
+        confirmLabel="Hapus"
+        confirmColor="danger"
+        onConfirm={async () => {
+          try {
+            if (ayConfirm.target) await axios.delete(`/api/academic-years/${ayConfirm.target.id}`);
+            setReloadAY((k) => k + 1);
+            toast.success("Tahun ajaran dihapus");
+          } catch (e: any) {
+            toast.error(e?.response?.data?.message || "Gagal menghapus");
+          }
+        }}
+      />
+      <ConfirmModal
+        isOpen={ssConfirm.open}
+        onOpenChange={(v) => setSsConfirm({ open: v, target: v ? ssConfirm.target : null })}
+        title="Hapus Setting"
+        description={ssConfirm.target ? `Yakin hapus setting "${ssConfirm.target.key}"?` : undefined}
+        confirmLabel="Hapus"
+        confirmColor="danger"
+        onConfirm={async () => {
+          try {
+            if (ssConfirm.target) await axios.delete(`/api/school-settings/${ssConfirm.target.id}`);
+            setReloadSS((k) => k + 1);
+            toast.success("Setting dihapus");
+          } catch (e: any) {
+            toast.error(e?.response?.data?.message || "Gagal menghapus");
+          }
+        }}
+      />
+      <ConfirmModal
+        isOpen={pdConfirm.open}
+        onOpenChange={(v) => setPdConfirm({ open: v, target: v ? pdConfirm.target : null })}
+        title="Hapus Periode"
+        description={pdConfirm.target ? `Yakin hapus periode "${pdConfirm.target.type}"?` : undefined}
+        confirmLabel="Hapus"
+        confirmColor="danger"
+        onConfirm={async () => {
+          try {
+            if (pdConfirm.target) await axios.delete(`/api/periods/${pdConfirm.target.id}`);
+            setReloadPD((k) => k + 1);
+            toast.success("Periode dihapus");
+          } catch (e: any) {
+            toast.error(e?.response?.data?.message || "Gagal menghapus");
+          }
+        }}
+      />
     </div>
   );
 }

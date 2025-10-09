@@ -46,9 +46,9 @@ export default function PermissionsSettingsPage() {
         externalReloadKey={reloadKey}
         searchPlaceholder="Cari permissions by nama/action/resource..."
         columns={[
-          { key: "name", header: "Nama" },
-          { key: "action", header: "Action" },
-          { key: "resource", header: "Resource" },
+          { key: "name", header: "Nama", sortable: true },
+          { key: "action", header: "Action", sortable: true },
+          { key: "resource", header: "Resource", sortable: true },
           {
             key: "actions",
             header: "Aksi",

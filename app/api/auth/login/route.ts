@@ -12,15 +12,17 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
+    const rl = rateLimit(`login:${getClientKey(req)}`, 10, 60_000);
+    if (!rl.ok) return NextResponse.json({ message: "Terlalu banyak percobaan. Coba lagi nanti." }, { status: 429 });
     const body = await req.json();
-    const email: string = body?.email?.toString() ?? "";
+    const identifier: string = body?.identifier?.toString() ?? body?.email?.toString() ?? "";
     const password: string = body?.password?.toString() ?? "";
 
-    if (!email || !password) {
-      return NextResponse.json({ message: "Email dan password wajib" }, { status: 400 });
+    if (!identifier || !password) {
+      return NextResponse.json({ message: "Identitas dan password wajib" }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findFirst({ where: { OR: [{ email: identifier }, { username: identifier }] } });
     if (!user) {
       return NextResponse.json({ message: "Kredensial salah" }, { status: 401 });
     }
@@ -58,3 +60,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: "Terjadi kesalahan" }, { status: 500 });
   }
 }
+import { getClientKey, rateLimit } from "@/lib/rateLimit";

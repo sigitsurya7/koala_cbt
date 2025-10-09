@@ -8,7 +8,7 @@ type Role = { id: string; name: string; key: string; scope: string };
 type Permission = { action: string; resource: string };
 
 type AppState = {
-  user: { id: string; name: string; email: string; type: string; isSuperAdmin: boolean } | null;
+  user: { id: string; name: string; email: string; type: string; isSuperAdmin: boolean; userDetail?: { avatarUrl?: string | null } } | null;
   schools: School[];
   activeSchoolId: string | null;
   roles: Role[];
@@ -45,4 +45,3 @@ export const useApp = create<AppState>()((set, get) => ({
     set({ activeSchoolId: schoolId });
   },
 }));
-

@@ -61,7 +61,7 @@ export default function UserDetailModal({ isOpen, onOpenChange, user }: Props) {
   const save = async () => {
     if (!user) return;
     try {
-      const payload: any = { userDetail };
+      const payload: any = { userDetail: { ...userDetail, birthDate: userDetail.birthDate || null } };
       if (user.type === "SISWA") payload.studentDetail = { ...student, schoolId: student.schoolId };
       if (user.type === "GURU") payload.teacherDetail = { ...teacher, schoolId: teacher.schoolId };
       if (user.type === "STAFF") payload.staffDetail = { ...staff, schoolId: staff.schoolId };
@@ -154,4 +154,3 @@ export default function UserDetailModal({ isOpen, onOpenChange, user }: Props) {
     </Modal>
   );
 }
-

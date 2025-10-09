@@ -35,7 +35,7 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
         toast.success("Berhasil logout");
         router.push("/login");
       } else if (key === "settings") {
-        router.push("/settings/menu");
+        router.push("/settings/profile");
       }
     } catch (e: any) {
       toast.error("Gagal memproses aksi");
@@ -46,7 +46,7 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
       isBordered
       isBlurred
       maxWidth="full"
-      className="rounded-2xl bg-white/50 dark:bg-default/50 backdrop-blur-lg shadow border border-divider flex items-center justify-between px-6 h-16"
+      className="rounded-2xl bg-white dark:bg-default/50 backdrop-blur-lg shadow border border-divider flex items-center justify-between px-0 md:px-6 h-16"
     >
       <NavbarContent justify="start">
         <NavbarItem className="lg:hidden">
@@ -59,13 +59,13 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
             <FiMenu className="text-xl" />
           </Button>
         </NavbarItem>
-        <NavbarBrand>
+        <NavbarBrand className="hidden md:block">
           <p className="font-bold text-inherit">Koala CBT</p>
         </NavbarBrand>
       </NavbarContent>
 
       <NavbarContent justify="end">
-        <NavbarItem>
+        <NavbarItem className="hidden md:block">
           {/* School picker (if multiple) */}
           {app.schools && app.schools.length > 0 && (
             <Dropdown>
@@ -97,15 +97,15 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
                 isBordered
                 color="primary"
                 size="sm"
-                src="https://api.dicebear.com/7.x/thumbs/svg?seed=Koala"
+                src={app.user?.userDetail?.avatarUrl || "https://api.dicebear.com/7.x/thumbs/svg?seed=Koala"}
                 className="cursor-pointer hover:opacity-90 transition-all"
               />
             </DropdownTrigger>
             <DropdownMenu aria-label="User menu" variant="flat" onAction={handleAction}>
               <DropdownItem key="profile" textValue="Profile">
                 <div className="flex flex-col">
-                  <span className="font-medium">Koalawan</span>
-                  <span className="text-xs opacity-60">koala@creative.com</span>
+                  <span className="font-medium">{app.user?.name || "User"}</span>
+                  <span className="text-xs opacity-60">{app.user?.email || "-"}</span>
                 </div>
               </DropdownItem>
               <DropdownItem startContent={<FiSettings />} key="settings">Pengaturan</DropdownItem>

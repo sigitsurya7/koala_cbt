@@ -72,8 +72,8 @@ export default function LoginPage() {
           {/* Input Email & Password */}
           <div className="space-y-5">
             <Input
-              label="Email"
-              placeholder="Masukkan email"
+              label="Username/Email"
+              placeholder="Masukkan username/email"
               variant="flat"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

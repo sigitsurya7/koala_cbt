@@ -10,9 +10,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   if (!user) return NextResponse.json({ message: "Not found" }, { status: 404 });
   const [ud, sd, td, stf] = await Promise.all([
     prisma.userDetail.findUnique({ where: { userId: params.id } }),
-    prisma.studentDetail.findUnique({ where: { userId: params.id } }),
-    prisma.teacherDetail.findUnique({ where: { userId: params.id } }),
-    prisma.staffDetail.findUnique({ where: { userId: params.id } }),
+    prisma.studentDetail.findUnique({ where: { userId: params.id }, include: { class: true, department: true, school: { select: { id: true, name: true, code: true } } } }),
+    prisma.teacherDetail.findUnique({ where: { userId: params.id }, include: { subject: true, school: { select: { id: true, name: true, code: true } } } }),
+    prisma.staffDetail.findUnique({ where: { userId: params.id }, include: { school: { select: { id: true, name: true, code: true } } } }),
   ]);
   return NextResponse.json({ user, userDetail: ud, studentDetail: sd, teacherDetail: td, staffDetail: stf });
 }
@@ -28,9 +28,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     await prisma.$transaction(async (tx) => {
       if (userDetail) {
+        // sanitize and coerce types (notably birthDate)
+        const ud: any = { ...userDetail };
+        if (typeof ud.birthDate === "string") {
+          ud.birthDate = ud.birthDate ? new Date(ud.birthDate) : null;
+        }
+        if (ud.birthDate === "") ud.birthDate = null;
         await tx.userDetail.upsert({
           where: { userId: params.id },
-          update: userDetail,
+          update: ud,
           create: { userId: params.id, fullName: userDetail.fullName || "" },
         });
       }
@@ -62,4 +68,3 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ message: e?.message ?? "Gagal menyimpan detail" }, { status: 500 });
   }
 }
-

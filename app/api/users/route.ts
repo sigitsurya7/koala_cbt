@@ -40,10 +40,17 @@ export async function POST(req: NextRequest) {
   if (deny) return deny;
   try {
     const body = await req.json();
-    const { name, email, password, type = "SISWA", isSuperAdmin = false, detailSchoolId } = body ?? {};
+    const { name, email, username, password, type = "SISWA", isSuperAdmin = false, detailSchoolId } = body ?? {};
     if (!name || !email || !password) return NextResponse.json({ message: "name, email, password wajib" }, { status: 400 });
+    // Username validation if provided
+    if (username) {
+      const ok = /^[a-z0-9](?:[a-z0-9_]{1,30}[a-z0-9])?$/i.test(username);
+      if (!ok) return NextResponse.json({ message: "Username tidak valid" }, { status: 400 });
+      const exist = await prisma.user.findUnique({ where: { username } });
+      if (exist) return NextResponse.json({ message: "Username sudah digunakan" }, { status: 400 });
+    }
     const passwordHash = await bcrypt.hash(password, 10);
-    const created = await prisma.user.create({ data: { name, email, passwordHash, type, isSuperAdmin } });
+    const created = await prisma.user.create({ data: { name, email, username: username || null, passwordHash, type, isSuperAdmin } });
     // Create base UserDetail with fullName defaulting to name
     await prisma.userDetail.create({ data: { userId: created.id, fullName: name } });
     // Optionally create typed detail if school provided
