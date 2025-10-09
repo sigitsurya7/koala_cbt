@@ -6,6 +6,9 @@ import { buildSearchWhere, pageToSkipTake, parsePageQuery } from "@/lib/paginati
 import { requirePermission } from "@/lib/acl";
 import { ACCESS_COOKIE, verifyAccessToken } from "@/lib/auth";
 import { ACTIVE_SCHOOL_COOKIE } from "@/lib/app";
+import { assertCsrf } from "@/lib/csrf";
+import { z } from "zod";
+import { handleApiError, zparse } from "@/lib/validate";
 
 type MenuNode = {
   id: string;
@@ -91,7 +94,8 @@ export async function GET(req: NextRequest) {
     activeSchoolId = req.cookies.get(ACTIVE_SCHOOL_COOKIE)?.value || null;
   } catch {}
 
-  const baseWhere: any = { isActive: true, menuSuperAdmin: isSuper ? true : false };
+  // Show all menus for superadmin; non-superadmin cannot see superadmin-only menus
+  const baseWhere: any = isSuper ? { isActive: true } : { isActive: true, menuSuperAdmin: false };
   const itemsRaw = await prisma.menu.findMany({
     where: baseWhere,
     orderBy: [{ order: "asc" }],
@@ -171,24 +175,23 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const deny = await requirePermission(req, { action: "CREATE", resource: "API/MENU" });
   if (deny) return deny;
+  const csrf = assertCsrf(req);
+  if (csrf) return csrf;
   try {
-    const body = await req.json();
-    const {
-      name,
-      key,
-      path,
-      icon,
-      order,
-      parentId = null,
-      visibility = "PUBLIC",
-      isActive = true,
-      roleIds = [],
-      menuSuperAdmin = false,
-    } = body ?? {};
-
-    if (!name || !key || !path) {
-      return NextResponse.json({ message: "Nama, key, dan path wajib" }, { status: 400 });
-    }
+    const schema = z.object({
+      name: z.string().trim().min(1),
+      key: z.string().trim().min(1),
+      path: z.string().trim().min(1),
+      icon: z.string().trim().optional().nullable(),
+      order: z.number().int().optional(),
+      parentId: z.string().optional().nullable(),
+      visibility: z.enum(["PUBLIC", "PRIVATE"]).optional(),
+      isActive: z.boolean().optional(),
+      roleIds: z.array(z.string()).optional(),
+      menuSuperAdmin: z.boolean().optional(),
+    });
+    const body = zparse(schema, await req.json());
+    const { name, key, path, icon, order, parentId = null, visibility = "PUBLIC", isActive = true, roleIds = [], menuSuperAdmin = false } = body;
 
     const created = await prisma.$transaction(async (tx) => {
       // Compute next order if not provided (root or per-parent)
@@ -219,6 +222,6 @@ export async function POST(req: NextRequest) {
     emitMenuUpdated({ action: "create", id: created.id });
     return NextResponse.json({ id: created.id });
   } catch (e: any) {
-    return NextResponse.json({ message: e?.message ?? "Gagal membuat menu" }, { status: 500 });
+    return handleApiError(e);
   }
 }

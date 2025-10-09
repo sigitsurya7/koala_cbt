@@ -3,6 +3,9 @@ export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { buildOrderBy, buildSearchWhere, pageToSkipTake, parsePageQuery } from "@/lib/pagination";
 import { requirePermission } from "@/lib/acl";
+import { assertCsrf } from "@/lib/csrf";
+import { z } from "zod";
+import { handleApiError, zparse } from "@/lib/validate";
 
 export async function GET(req: NextRequest) {
   const deny = await requirePermission(req, { action: "READ", resource: "API/ROLES" });
@@ -59,10 +62,17 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const deny = await requirePermission(req, { action: "CREATE", resource: "API/ROLES" });
   if (deny) return deny;
+  const csrf = assertCsrf(req);
+  if (csrf) return csrf;
   try {
-    const body = await req.json();
-    let { name, key, scope = "SCHOOL", schoolId = null, isSystem = false } = body ?? {};
-    if (!name) return NextResponse.json({ message: "Nama wajib" }, { status: 400 });
+    const schema = z.object({
+      name: z.string().trim().min(1),
+      key: z.string().trim().min(1).optional(),
+      scope: z.enum(["GLOBAL", "SCHOOL"]).optional(),
+      schoolId: z.string().trim().nullable().optional(),
+      isSystem: z.boolean().optional(),
+    });
+    let { name, key, scope = "SCHOOL", schoolId = null, isSystem = false } = zparse(schema, await req.json());
     if (!key) {
       key = String(name)
         .trim()
@@ -73,17 +83,11 @@ export async function POST(req: NextRequest) {
         .join("_");
     }
     const created = await prisma.role.create({
-      data: {
-        name,
-        key,
-        scope,
-        schoolId,
-        isSystem,
-      },
+      data: { name, key, scope, schoolId, isSystem },
       select: { id: true },
     });
     return NextResponse.json({ id: created.id });
   } catch (e: any) {
-    return NextResponse.json({ message: e?.message ?? "Gagal membuat role" }, { status: 500 });
+    return handleApiError(e);
   }
 }

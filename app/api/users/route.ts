@@ -3,13 +3,19 @@ export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { buildOrderBy, buildSearchWhere, pageToSkipTake, parsePageQuery } from "@/lib/pagination";
 import { requirePermission } from "@/lib/acl";
+import { enforceActiveSchool } from "@/lib/tenant";
+import { assertCsrf } from "@/lib/csrf";
+import { z } from "zod";
+import { handleApiError, zparse } from "@/lib/validate";
 import bcrypt from "bcryptjs";
 
 export async function GET(req: NextRequest) {
   const deny = await requirePermission(req, { action: "READ", resource: "API/USERS" });
   if (deny) return deny;
+  const ensured = await enforceActiveSchool(req);
+  if (ensured instanceof NextResponse) return ensured;
   const { page, perPage, q, sort, order } = parsePageQuery(req);
-  const where: any = { ...(buildSearchWhere(["name", "email"], q) as any) };
+  const where: any = { ...(buildSearchWhere(["name", "email"], q) as any), schools: { some: { schoolId: ensured.schoolId } } };
   const total = await prisma.user.count({ where });
   const { skip, take } = pageToSkipTake(page, perPage);
   const users = await prisma.user.findMany({
@@ -21,31 +27,33 @@ export async function GET(req: NextRequest) {
       email: true,
       type: true,
       isSuperAdmin: true,
-      studentDetail: { include: { school: { select: { name: true, code: true } } } },
-      teacherDetail: { include: { school: { select: { name: true, code: true } } } },
-      staffDetail: { include: { school: { select: { name: true, code: true } } } },
+      schools: { include: { school: { select: { name: true, code: true } } }, take: 1 },
     },
     skip,
     take,
   });
-  const rows = users.map((u) => {
-    const school = u.studentDetail?.school || u.teacherDetail?.school || u.staffDetail?.school || null;
-    return { id: u.id, name: u.name, email: u.email, type: u.type, isSuperAdmin: u.isSuperAdmin, schoolName: school?.name ?? null, schoolCode: school?.code ?? null };
-  });
+  const rows = users.map((u) => ({ id: u.id, name: u.name, email: u.email, type: u.type, isSuperAdmin: u.isSuperAdmin, schoolName: u.schools[0]?.school?.name ?? null, schoolCode: u.schools[0]?.school?.code ?? null }));
   return NextResponse.json({ data: rows, page, perPage, total, totalPages: Math.ceil(total / perPage) });
 }
 
 export async function POST(req: NextRequest) {
   const deny = await requirePermission(req, { action: "CREATE", resource: "API/USERS" });
   if (deny) return deny;
+  const csrf = assertCsrf(req);
+  if (csrf) return csrf;
   try {
-    const body = await req.json();
-    const { name, email, username, password, type = "SISWA", isSuperAdmin = false, detailSchoolId } = body ?? {};
-    if (!name || !email || !password) return NextResponse.json({ message: "name, email, password wajib" }, { status: 400 });
+    const schema = z.object({
+      name: z.string().trim().min(1),
+      email: z.string().email(),
+      username: z.string().regex(/^[a-z0-9](?:[a-z0-9_]{1,30}[a-z0-9])?$/i).optional(),
+      password: z.string().min(6),
+      type: z.enum(["SISWA","GURU","STAFF","ADMIN"]).optional(),
+      isSuperAdmin: z.boolean().optional(),
+      detailSchoolId: z.string().optional(),
+    });
+    const { name, email, username, password, type = "SISWA", isSuperAdmin = false, detailSchoolId } = zparse(schema, await req.json());
     // Username validation if provided
     if (username) {
-      const ok = /^[a-z0-9](?:[a-z0-9_]{1,30}[a-z0-9])?$/i.test(username);
-      if (!ok) return NextResponse.json({ message: "Username tidak valid" }, { status: 400 });
       const exist = await prisma.user.findUnique({ where: { username } });
       if (exist) return NextResponse.json({ message: "Username sudah digunakan" }, { status: 400 });
     }
@@ -65,6 +73,6 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ id: created.id });
   } catch (e: any) {
-    return NextResponse.json({ message: e?.message ?? "Gagal membuat user" }, { status: 500 });
+    return handleApiError(e);
   }
 }

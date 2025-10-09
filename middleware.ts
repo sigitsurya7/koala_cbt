@@ -68,24 +68,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // For protected pages: ensure access or use refresh to mint new access
+  // For protected pages: require valid access token only (no refresh fallback here)
   if (isProtected) {
     if (isLoggedIn) return NextResponse.next();
-
-    // Try refresh flow
-    const refreshPayload = refresh ? await verify(refresh, REFRESH_SECRET) : null;
-    if (refreshPayload) {
-      const newAccess = await signAccess({
-        sub: refreshPayload.sub,
-        email: refreshPayload.email,
-        name: refreshPayload.name,
-        type: refreshPayload.type,
-      });
-
-      const res = NextResponse.next();
-      res.cookies.set(ACCESS_COOKIE, newAccess, { ...cookieOptions, maxAge: 60 * 60 * 4 });
-      return res;
-    }
 
     // No valid tokens -> redirect to login
     const url = req.nextUrl.clone();

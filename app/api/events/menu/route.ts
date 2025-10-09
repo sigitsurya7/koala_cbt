@@ -2,12 +2,12 @@ export const runtime = "nodejs";
 import { menuEvents } from "@/lib/events";
 
 export async function GET() {
+  let onMessage: ((payload: unknown) => void) | null = null;
   const stream = new ReadableStream({
     start(controller) {
-      const enc = (data: any) =>
-        `data: ${JSON.stringify(data)}\n\n`;
+      const enc = (data: any) => `data: ${JSON.stringify(data)}\n\n`;
 
-      const onMessage = (payload: unknown) => {
+      onMessage = (payload: unknown) => {
         const chunk = enc({ type: "menu", payload });
         controller.enqueue(new TextEncoder().encode(chunk));
       };
@@ -16,13 +16,9 @@ export async function GET() {
 
       // Send initial ping to establish stream
       controller.enqueue(new TextEncoder().encode("event: ping\n" + enc({ ok: true })));
-
-      return () => {
-        menuEvents.off("message", onMessage);
-      };
     },
     cancel() {
-      // no-op
+      if (onMessage) menuEvents.off("message", onMessage);
     },
   });
 

@@ -1,4 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
+import { prisma } from "@/lib/prisma";
+import { generateJti, parseDuration } from "@/lib/tokenUtil";
 
 export type JwtPayload = {
   sub: string; // user id
@@ -37,6 +39,38 @@ export async function signRefreshToken(payload: JwtPayload) {
     .setIssuedAt()
     .setExpirationTime(REFRESH_TOKEN_EXPIRES_IN)
     .sign(getRefreshSecret());
+}
+
+export async function issueTokens(payload: JwtPayload) {
+  const accessToken = await signAccessToken(payload);
+  const jti = generateJti();
+  const refreshToken = await signRefreshToken({ ...payload, jti } as any);
+  // persist refresh record
+  const ms = parseDuration(REFRESH_TOKEN_EXPIRES_IN);
+  const expiresAt = new Date(Date.now() + (ms || 7 * 24 * 60 * 60 * 1000));
+  await prisma.refreshToken.create({ data: { userId: payload.sub, jti, expiresAt } });
+  return { accessToken, refreshToken, jti, expiresAt };
+}
+
+export async function rotateRefreshToken(oldToken: string) {
+  const payload = await verifyRefreshToken(oldToken);
+  if (!payload || !payload.sub || !(payload as any).jti) return null;
+  const jti = String((payload as any).jti);
+  const record = await prisma.refreshToken.findUnique({ where: { jti } });
+  if (!record || record.revoked || record.userId !== payload.sub || record.expiresAt < new Date()) return null;
+  // revoke old
+  await prisma.refreshToken.update({ where: { jti }, data: { revoked: true, revokedAt: new Date() } });
+  // issue new
+  return await issueTokens({ sub: payload.sub, email: payload.email, name: payload.name, type: payload.type });
+}
+
+export async function revokeRefreshToken(token: string) {
+  const payload = await verifyRefreshToken(token);
+  if (!payload || !(payload as any).jti) return;
+  const jti = String((payload as any).jti);
+  try {
+    await prisma.refreshToken.update({ where: { jti }, data: { revoked: true, revokedAt: new Date() } });
+  } catch {}
 }
 
 export async function verifyAccessToken(token: string): Promise<JwtPayload | null> {

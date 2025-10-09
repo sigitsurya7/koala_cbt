@@ -116,6 +116,7 @@ model Period {
   isActive       Boolean     @default(false)
 
   exams          Exam[]
+  @@index([schoolId, academicYearId])
 }
 
 // ---------- User & Membership ----------
@@ -138,8 +139,9 @@ model User {
   auditLogs     AuditLog[]
   userDetail    UserDetail?
   studentDetail StudentDetail?
-  teacherDetail TeacherDetail?
-  staffDetail   StaffDetail?
+  teacherDetail TeacherDetail[]
+  staffDetail   StaffDetail[]
+  refreshTokens RefreshToken[]
 }
 
 model UserSchool {
@@ -154,6 +156,7 @@ model UserSchool {
 
   isActive  Boolean @default(true)
   roles     UserRole[]
+  @@index([userId, schoolId])
 }
 
 // ---------- ACL ----------
@@ -206,6 +209,7 @@ model UserRole {
   // Link to membership in a specific school (optional)
   userSchoolId String?
   userSchool   UserSchool? @relation(fields: [userSchoolId], references: [id])
+  @@index([userId, schoolId])
 }
 
 model Menu {
@@ -223,6 +227,7 @@ model Menu {
   menuSuperAdmin Boolean @default(false)
 
   roleMenus  RoleMenu[]
+  @@index([parentId, order])
 }
 
 model RoleMenu {
@@ -233,6 +238,20 @@ model RoleMenu {
   menu   Menu   @relation(fields: [menuId], references: [id])
 
   @@unique([roleId, menuId])
+}
+
+// ---------- Auth Tokens ----------
+model RefreshToken {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  jti        String   @unique
+  revoked    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  revokedAt  DateTime?
+  expiresAt  DateTime
+
+  @@index([userId])
 }
 
 // ---------- Master Akademik ----------
@@ -247,6 +266,7 @@ model Department {
   classes   Class[]
   subjects  Subject[]
   studentDetails StudentDetail[] @relation("DepartmentStudentDetails")
+  @@index([schoolId, name])
 }
 
 model Class {
@@ -262,6 +282,7 @@ model Class {
   students   UserSchool[] @relation("ClassStudents")
   exams      Exam[]
   studentDetails StudentDetail[] @relation("ClassStudentDetails")
+  @@index([schoolId, departmentId])
 }
 
 model Room {
@@ -273,6 +294,7 @@ model Room {
   isActive  Boolean  @default(true)
 
   examRooms ExamRoom[]
+  @@index([schoolId, name])
 }
 
 model Subject {
@@ -308,6 +330,7 @@ model Question {
   isArchived  Boolean  @default(false)
 
   examQuestions ExamQuestion[]
+  @@index([schoolId, subjectId])
 }
 
 model Exam {
@@ -337,6 +360,7 @@ model Exam {
   examQuestions   ExamQuestion[]
   examRooms       ExamRoom[]
   attempts        Attempt[]
+  @@index([schoolId, periodId])
 }
 
 model ExamRoom {
@@ -400,6 +424,7 @@ model Attempt {
   submittedAt DateTime?
 
   answers     Answer[]
+  @@index([schoolId, examId, studentId, status])
 }
 
 model Answer {
@@ -467,7 +492,7 @@ model StudentDetail {
 
 model TeacherDetail {
   id         String   @id @default(cuid())
-  userId     String   @unique
+  userId     String
   user       User     @relation(fields: [userId], references: [id])
   schoolId   String
   school     School   @relation("SchoolTeacherDetails", fields: [schoolId], references: [id])
@@ -481,11 +506,12 @@ model TeacherDetail {
   address    String?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
+  @@unique([userId, schoolId])
 }
 
 model StaffDetail {
   id         String   @id @default(cuid())
-  userId     String   @unique
+  userId     String
   user       User     @relation(fields: [userId], references: [id])
   schoolId   String
   school     School   @relation("SchoolStaffDetails", fields: [schoolId], references: [id])
@@ -495,4 +521,5 @@ model StaffDetail {
   address    String?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
+  @@unique([userId, schoolId])
 }

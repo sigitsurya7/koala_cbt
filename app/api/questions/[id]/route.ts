@@ -8,30 +8,36 @@ import { z } from "zod";
 import { handleApiError, zparse } from "@/lib/validate";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const deny = await requirePermission(req, { action: "READ", resource: "API/SCHOOL_SETTINGS" });
+  const deny = await requirePermission(req, { action: "READ", resource: "API/QUESTIONS" });
   if (deny) return deny;
   const ensured = await enforceActiveSchool(req);
   if (ensured instanceof NextResponse) return ensured;
-  const it = await prisma.schoolSetting.findUnique({ where: { id: params.id } });
+  const it = await prisma.question.findUnique({ where: { id: params.id } });
   if (!it || it.schoolId !== ensured.schoolId) return NextResponse.json({ message: "Not found" }, { status: 404 });
   return NextResponse.json({ item: it });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const deny = await requirePermission(req, { action: "UPDATE", resource: "API/SCHOOL_SETTINGS" });
+  const deny = await requirePermission(req, { action: "UPDATE", resource: "API/QUESTIONS" });
   if (deny) return deny;
   const csrf = assertCsrf(req);
   if (csrf) return csrf;
   try {
     const ensured = await enforceActiveSchool(req);
     if (ensured instanceof NextResponse) return ensured;
-    const it = await prisma.schoolSetting.findUnique({ where: { id: params.id } });
-    if (!it || it.schoolId !== ensured.schoolId) return NextResponse.json({ message: "Not found" }, { status: 404 });
-    const schema = z.object({ key: z.string().trim().min(1).optional(), type: z.enum(["STRING","NUMBER","BOOLEAN","JSON"]).optional(), value: z.any().optional() });
+    const schema = z.object({
+      subjectId: z.string().trim().min(1).optional(),
+      type: z.enum(["MCQ", "ESSAY"]).optional(),
+      text: z.string().trim().min(1).optional(),
+      options: z.array(z.object({ key: z.string(), text: z.string() })).optional(),
+      correctKey: z.string().optional(),
+      points: z.number().int().min(0).optional(),
+      difficulty: z.number().int().min(0).max(10).optional(),
+    });
     const body = zparse(schema, await req.json());
-    const data: any = { ...body };
-    if (data.value !== undefined) data.value = String(data.value ?? "");
-    await prisma.schoolSetting.update({ where: { id: params.id }, data });
+    const it = await prisma.question.findUnique({ where: { id: params.id } });
+    if (!it || it.schoolId !== ensured.schoolId) return NextResponse.json({ message: "Not found" }, { status: 404 });
+    await prisma.question.update({ where: { id: params.id }, data: body as any });
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return handleApiError(e);
@@ -39,16 +45,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const deny = await requirePermission(req, { action: "DELETE", resource: "API/SCHOOL_SETTINGS" });
+  const deny = await requirePermission(req, { action: "DELETE", resource: "API/QUESTIONS" });
   if (deny) return deny;
   const csrf = assertCsrf(req);
   if (csrf) return csrf;
   try {
     const ensured = await enforceActiveSchool(req);
     if (ensured instanceof NextResponse) return ensured;
-    const it = await prisma.schoolSetting.findUnique({ where: { id: params.id } });
+    const it = await prisma.question.findUnique({ where: { id: params.id } });
     if (!it || it.schoolId !== ensured.schoolId) return NextResponse.json({ message: "Not found" }, { status: 404 });
-    await prisma.schoolSetting.delete({ where: { id: params.id } });
+    await prisma.question.delete({ where: { id: params.id } });
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return handleApiError(e);

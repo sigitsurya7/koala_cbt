@@ -3,6 +3,9 @@ export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { buildOrderBy, buildSearchWhere, pageToSkipTake, parsePageQuery } from "@/lib/pagination";
 import { requirePermission } from "@/lib/acl";
+import { assertCsrf } from "@/lib/csrf";
+import { z } from "zod";
+import { handleApiError, zparse } from "@/lib/validate";
 
 export async function GET(req: NextRequest) {
   const deny = await requirePermission(req, { action: "READ", resource: "API/SCHOOLS" });
@@ -36,16 +39,19 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const deny = await requirePermission(req, { action: "CREATE", resource: "API/SCHOOLS" });
   if (deny) return deny;
+  const csrf = assertCsrf(req);
+  if (csrf) return csrf;
   try {
-    const body = await req.json();
-    const { name, code, logoUrl = null, isActive = true } = body ?? {};
-    if (!name || !code) return NextResponse.json({ message: "Nama dan kode wajib" }, { status: 400 });
-    const created = await prisma.school.create({
-      data: { name, code, logoUrl, isActive },
-      select: { id: true },
+    const schema = z.object({
+      name: z.string().trim().min(1),
+      code: z.string().trim().min(1),
+      logoUrl: z.string().url().nullable().optional(),
+      isActive: z.boolean().optional(),
     });
+    const { name, code, logoUrl = null, isActive = true } = zparse(schema, await req.json());
+    const created = await prisma.school.create({ data: { name, code, logoUrl, isActive }, select: { id: true } });
     return NextResponse.json({ id: created.id });
   } catch (e: any) {
-    return NextResponse.json({ message: e?.message ?? "Gagal membuat sekolah" }, { status: 500 });
+    return handleApiError(e);
   }
 }

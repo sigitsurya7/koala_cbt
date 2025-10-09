@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
   const job = getJob(jobId);
   if (!job) return new Response("", { status: 404 });
 
+  let onProgress: ((payload: any) => void) | null = null;
   const stream = new ReadableStream({
     start(controller) {
       const enc = (data: any) => `data: ${JSON.stringify(data)}\n\n`;
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
       // Emit initial
       send({ type: "status", status: job.status, total: job.total, processed: job.processed });
 
-      const onProgress = (payload: any) => send({ type: "progress", ...payload });
+      onProgress = (payload: any) => send({ type: "progress", ...payload });
       job.emitter.on("progress", onProgress);
 
       // Start async runner
@@ -67,7 +68,9 @@ export async function GET(req: NextRequest) {
         }
       })();
     },
-    cancel() {},
+    cancel() {
+      if (onProgress) job.emitter.off("progress", onProgress);
+    },
   });
 
   return new Response(stream, {

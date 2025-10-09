@@ -6,8 +6,7 @@ import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
   cookieOptions,
-  signAccessToken,
-  signRefreshToken,
+  issueTokens,
 } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
@@ -39,8 +38,7 @@ export async function POST(req: NextRequest) {
       type: user.type,
     };
 
-    const accessToken = await signAccessToken(payload);
-    const refreshToken = await signRefreshToken(payload);
+    const { accessToken, refreshToken } = await issueTokens(payload);
 
     const res = NextResponse.json({
       user: { id: user.id, email: user.email, name: user.name, type: user.type },

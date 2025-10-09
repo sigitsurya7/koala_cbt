@@ -126,148 +126,82 @@ try {
     },
   });
 
-  // Seed simple menu: Dashboard only
+  // Seed Menu with stable keys and parent linkage by key
   const menus = [
-    {
-      id: 'cmghihueq000dvkccyjpyu9zj',
-      name: 'Jurusan',
-      key: 'jurusan',
-      path: '/master/jurusan',
-      icon: null,
-      order: 0,
-      parentId: 'cmghidcqr000bvkccfakegx8b',
-      visibility: 'PRIVATE',
-      isActive: true,
-      menuSuperAdmin: true,
-    },
-    {
-      id: 'cmghh2n6p0009vkcchh3b2jyu',
-      name: 'Resource',
-      key: 'resource',
-      path: '/settings/resource',
-      icon: null,
-      order: 3,
-      parentId: 'cmghbekiz0001vkd4qoptpp3f',
-      visibility: 'PRIVATE',
-      isActive: true,
-      menuSuperAdmin: true,
-    },
-    {
-      id: 'cmghdkasn0001vkcc05rl8poa',
-      name: 'Sekolah',
-      key: 'sekolah',
-      path: '/settings/school',
-      icon: null,
-      order: 2,
-      parentId: 'cmghbekiz0001vkd4qoptpp3f',
-      visibility: 'PRIVATE',
-      isActive: true,
-      menuSuperAdmin: true,
-    },
-    {
-      id: 'cmghbwc0v0005vkd4bh9efwgb',
-      name: 'Role',
-      key: 'role',
-      path: '/settings/role',
-      icon: null,
-      order: 1,
-      parentId: 'cmghbekiz0001vkd4qoptpp3f',
-      visibility: 'PRIVATE',
-      isActive: true,
-      menuSuperAdmin: true,
-    },
-    {
-      id: 'cmghbf8c80003vkd43reqlf7x',
-      name: 'Menu',
-      key: 'menu',
-      path: '/settings/menu',
-      icon: null,
-      order: 0,
-      parentId: 'cmghbekiz0001vkd4qoptpp3f',
-      visibility: 'PRIVATE',
-      isActive: true,
-      menuSuperAdmin: true,
-    },
-    {
-      id: 'cmghlrbfn0001vk7w12byhfai',
-      name: 'Kelas',
-      key: 'kelas',
-      path: '/master/kelas',
-      icon: null,
-      order: 0,
-      parentId: 'cmghidcqr000bvkccfakegx8b',
-      visibility: 'PRIVATE',
-      isActive: true,
-      menuSuperAdmin: true,
-    },
-    {
-      id: 'cmghls6nv0003vk7w2068d9un',
-      name: 'Ruangan',
-      key: 'ruangan',
-      path: '/master/ruangan',
-      icon: null,
-      order: 0,
-      parentId: 'cmghidcqr000bvkccfakegx8b',
-      visibility: 'PRIVATE',
-      isActive: true,
-      menuSuperAdmin: true,
-    },
-    {
-      id: 'cmghidcqr000bvkccfakegx8b',
-      name: 'Master',
-      key: 'master',
-      path: '/master',
-      icon: 'BsDatabase',
-      order: 2,
-      parentId: null,
-      visibility: 'PRIVATE',
-      isActive: true,
-      menuSuperAdmin: true,
-    },
-    {
-      id: 'cmghmvq580005vk7wdjfvor1q',
-      name: 'User Management',
-      key: 'user_management',
-      path: '/user_management',
-      icon: 'MdPeopleOutline',
-      order: 3,
-      parentId: null,
-      visibility: 'PRIVATE',
-      isActive: true,
-      menuSuperAdmin: true,
-    },
-    {
-      id: 'cmgharum60002vkw4x6jfx8zl',
-      name: 'Dashboard',
-      key: 'dashboard',
-      path: '/dashboard',
-      icon: 'FiHome',
-      order: 1,
-      parentId: null,
-      visibility: 'PRIVATE',
-      isActive: true,
-      menuSuperAdmin: true,
-    },
-    {
-      id: 'cmghbekiz0001vkd4qoptpp3f',
-      name: 'Settings',
-      key: 'settings',
-      path: '/settings',
-      icon: 'FiSettings',
-      order: 4,
-      parentId: null,
-      visibility: 'PRIVATE',
-      isActive: true,
-      menuSuperAdmin: true,
-    },
-  ]
+    { name: 'Master', key: 'master', path: '/master', icon: 'BsDatabase', order: 2, parentKey: null, visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'User Management', key: 'user_management', path: '/user_management', icon: 'MdPeopleOutline', order: 3, parentKey: null, visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Dashboard', key: 'dashboard', path: '/dashboard', icon: 'FiHome', order: 1, parentKey: null, visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Settings', key: 'settings', path: '/settings', icon: 'FiSettings', order: 4, parentKey: null, visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Jurusan', key: 'jurusan', path: '/master/jurusan', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Kelas', key: 'kelas', path: '/master/kelas', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Ruangan', key: 'ruangan', path: '/master/ruangan', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Resource', key: 'resource', path: '/settings/resource', icon: null, order: 3, parentKey: 'settings', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Sekolah', key: 'sekolah', path: '/settings/school', icon: null, order: 2, parentKey: 'settings', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Role', key: 'role', path: '/settings/role', icon: null, order: 1, parentKey: 'settings', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Menu', key: 'menu', path: '/settings/menu', icon: null, order: 0, parentKey: 'settings', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+  ];
 
-  for (const menu of menus) {
+  // Upsert parents first (no parentKey)
+  const parentIdByKey = new Map();
+  for (const m of menus.filter((x) => !x.parentKey)) {
+    const up = await prisma.menu.upsert({
+      where: { key: m.key },
+      update: {
+        name: m.name,
+        path: m.path,
+        icon: m.icon,
+        order: m.order,
+        visibility: m.visibility,
+        isActive: m.isActive,
+        menuSuperAdmin: m.menuSuperAdmin,
+        parentId: null,
+      },
+      create: {
+        name: m.name,
+        key: m.key,
+        path: m.path,
+        icon: m.icon,
+        order: m.order,
+        visibility: m.visibility,
+        isActive: m.isActive,
+        menuSuperAdmin: m.menuSuperAdmin,
+      },
+    });
+    parentIdByKey.set(m.key, up.id);
+  }
+
+  // Upsert children with resolved parentId
+  for (const m of menus.filter((x) => x.parentKey)) {
+    let parentId = parentIdByKey.get(m.parentKey);
+    if (!parentId) {
+      const parent = await prisma.menu.findUnique({ where: { key: m.parentKey } });
+      parentId = parent?.id ?? null;
+      if (parentId) parentIdByKey.set(m.parentKey, parentId);
+    }
     await prisma.menu.upsert({
-      where: { id: menu.id },
-      update: {},
-      create: menu,
-    })
+      where: { key: m.key },
+      update: {
+        name: m.name,
+        path: m.path,
+        icon: m.icon,
+        order: m.order,
+        visibility: m.visibility,
+        isActive: m.isActive,
+        menuSuperAdmin: m.menuSuperAdmin,
+        parentId,
+      },
+      create: {
+        name: m.name,
+        key: m.key,
+        path: m.path,
+        icon: m.icon,
+        order: m.order,
+        visibility: m.visibility,
+        isActive: m.isActive,
+        menuSuperAdmin: m.menuSuperAdmin,
+        parentId,
+      },
+    });
   }
 
   // Seed roles, permissions, roleMenus minimal
@@ -279,17 +213,61 @@ try {
   ]);
 
   const permList = [
+    // Menu
     { name: "Lihat Menu", action: "READ", resource: "API/MENU" },
     { name: "Kelola Menu", action: "CREATE", resource: "API/MENU" },
+    // Roles/Users basic
     { name: "Lihat Role", action: "READ", resource: "API/ROLES" },
     { name: "Lihat Users", action: "READ", resource: "API/USERS" },
     { name: "Lihat Sekolah", action: "READ", resource: "API/SCHOOLS" },
+    // Departments
+    { name: "Lihat Jurusan", action: "READ", resource: "API/DEPARTMENTS" },
+    { name: "Buat Jurusan", action: "CREATE", resource: "API/DEPARTMENTS" },
+    { name: "Ubah Jurusan", action: "UPDATE", resource: "API/DEPARTMENTS" },
+    { name: "Hapus Jurusan", action: "DELETE", resource: "API/DEPARTMENTS" },
+    // Rooms
+    { name: "Lihat Ruangan", action: "READ", resource: "API/ROOMS" },
+    { name: "Buat Ruangan", action: "CREATE", resource: "API/ROOMS" },
+    { name: "Ubah Ruangan", action: "UPDATE", resource: "API/ROOMS" },
+    { name: "Hapus Ruangan", action: "DELETE", resource: "API/ROOMS" },
+    // School Settings
+    { name: "Lihat Setting Sekolah", action: "READ", resource: "API/SCHOOL_SETTINGS" },
+    { name: "Buat Setting Sekolah", action: "CREATE", resource: "API/SCHOOL_SETTINGS" },
+    { name: "Ubah Setting Sekolah", action: "UPDATE", resource: "API/SCHOOL_SETTINGS" },
+    { name: "Hapus Setting Sekolah", action: "DELETE", resource: "API/SCHOOL_SETTINGS" },
+    // Role users assignment
+    { name: "Lihat User per Role", action: "READ", resource: "API/ROLES_USERS" },
+    { name: "Atur User per Role", action: "UPDATE", resource: "API/ROLES_USERS" },
+    // Questions
+    { name: "Lihat Soal", action: "READ", resource: "API/QUESTIONS" },
+    { name: "Buat Soal", action: "CREATE", resource: "API/QUESTIONS" },
+    { name: "Ubah Soal", action: "UPDATE", resource: "API/QUESTIONS" },
+    { name: "Hapus Soal", action: "DELETE", resource: "API/QUESTIONS" },
+    // Exams
+    { name: "Lihat Ujian", action: "READ", resource: "API/EXAMS" },
+    { name: "Buat Ujian", action: "CREATE", resource: "API/EXAMS" },
+    // Attempts
+    { name: "Lihat Attempt", action: "READ", resource: "API/ATTEMPTS" },
+    { name: "Mulai Attempt", action: "CREATE", resource: "API/ATTEMPTS" },
   ];
   for (const p of permList) {
     await prisma.permission.upsert({ where: { action_resource: { action: p.action, resource: p.resource } }, update: {}, create: p });
   }
   const adminRole = roles[0];
-  const perms = await prisma.permission.findMany({ where: { resource: { in: ["API/MENU", "API/ROLES", "API/USERS", "API/SCHOOLS"] } } });
+  const adminResources = [
+    "API/MENU",
+    "API/ROLES",
+    "API/USERS",
+    "API/SCHOOLS",
+    "API/DEPARTMENTS",
+    "API/ROOMS",
+    "API/SCHOOL_SETTINGS",
+    "API/ROLES_USERS",
+    "API/QUESTIONS",
+    "API/EXAMS",
+    "API/ATTEMPTS",
+  ];
+  const perms = await prisma.permission.findMany({ where: { resource: { in: adminResources } } });
   for (const pr of perms) {
     await prisma.rolePermission.upsert({ where: { roleId_permissionId: { roleId: adminRole.id, permissionId: pr.id } }, update: {}, create: { roleId: adminRole.id, permissionId: pr.id } });
   }
