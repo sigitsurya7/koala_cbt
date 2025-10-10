@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { Button, Chip, Input, Select, SelectItem, Switch } from "@heroui/react";
+import { useApp } from "@/stores/useApp";
 import DataTable, { type FetchParams, type Paged } from "@/components/DataTable";
 import ConfirmModal from "@/components/ConfirmModal";
 import { FiEdit, FiPlus, FiTrash, FiUpload, FiDownload } from "react-icons/fi";
@@ -17,13 +18,19 @@ export default function UserManagementPage() {
   const [isOpen, setOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [target, setTarget] = useState<UserRow | null>(null);
-  const [form, setForm] = useState<{ id?: string; name: string; email: string; password?: string; type: string; isSuperAdmin: boolean }>({ name: "", email: "", password: "", type: "SISWA", isSuperAdmin: false });
+  const [form, setForm] = useState<{ id?: string; name: string; email: string; username?: string; password?: string; type: string; isSuperAdmin: boolean; roleId?: string | null; schoolId?: string | null }>({ name: "", email: "", username: "", password: "", type: "SISWA", isSuperAdmin: false, roleId: null, schoolId: null });
+  const app = useApp();
+  const [roles, setRoles] = useState<Array<{ id: string; name: string; key: string }>>([]);
+
+  useEffect(() => {
+    axios.get(`/api/roles?all=1`).then((r) => setRoles(r.data.roles || [])).catch(() => setRoles([]));
+  }, []);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailUser, setDetailUser] = useState<UserRow | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
-  const openCreate = () => { setForm({ name: "", email: "", password: "", type: "SISWA", isSuperAdmin: false }); setOpen(true); };
-  const openEdit = (u: UserRow) => { setForm({ id: u.id, name: u.name, email: u.email, type: u.type, isSuperAdmin: u.isSuperAdmin }); setOpen(true); };
+  const openCreate = () => { setForm({ name: "", email: "", username: "", password: "", type: "SISWA", isSuperAdmin: false, roleId: null, schoolId: app.activeSchoolId || (app.schools?.[0]?.id ?? null) }); setOpen(true); };
+  const openEdit = (u: UserRow) => { setForm({ id: u.id, name: u.name, email: u.email, username: undefined, type: u.type, isSuperAdmin: u.isSuperAdmin, roleId: null }); setOpen(true); };
   const askRemove = (u: UserRow) => { setTarget(u); setConfirmOpen(true); };
 
   const save = async () => {
@@ -32,7 +39,30 @@ export default function UserManagementPage() {
         await axios.put(`/api/users/${form.id}`, form);
         toast.success("User diperbarui");
       } else {
-        await axios.post(`/api/users`, form);
+        const payload: any = { name: form.name, email: form.email, username: form.username, password: form.password, type: form.type, isSuperAdmin: form.isSuperAdmin };
+        const schoolId = form.schoolId || app.activeSchoolId || null;
+        if (!form.isSuperAdmin && schoolId) payload.detailSchoolId = schoolId;
+        const res = await axios.post(`/api/users`, payload);
+        const newUserId = res.data.id as string;
+        // Assign role: siswa -> role Siswa otomatis; selain itu gunakan roleId terpilih jika ada
+        let roleId: string | null = null;
+        if (form.type === "SISWA") {
+          const found = roles.find((r) => r.key?.toUpperCase() === "SISWA");
+          roleId = found?.id || null;
+        } else {
+          roleId = form.roleId || null;
+        }
+        if (roleId && schoolId) {
+          try {
+            if (app.activeSchoolId !== schoolId) {
+              await app.setActiveSchool(schoolId);
+            }
+            const curr = await axios.get<{ users: Array<UserRow> }>(`/api/roles/${roleId}/users`);
+            const ids = new Set((curr.data.users || []).map((u) => u.id));
+            ids.add(newUserId);
+            await axios.put(`/api/roles/${roleId}/users`, { userIds: Array.from(ids) });
+          } catch {}
+        }
         toast.success("User ditambahkan");
       }
       setOpen(false); setReloadKey((k) => k + 1);
@@ -96,6 +126,7 @@ export default function UserManagementPage() {
             <h3 className="text-lg font-semibold">{form.id ? "Edit User" : "Tambah User"}</h3>
             <Input label="Nama" labelPlacement="outside" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
             <Input label="Email" type="email" labelPlacement="outside" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+            <Input label="Username" labelPlacement="outside" value={form.username ?? ""} onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))} />
             <Input label="Password" type="password" labelPlacement="outside" value={form.password ?? ""} placeholder={form.id ? "Kosongkan bila tidak diubah" : "••••••"} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
             <Select label="Tipe User" labelPlacement="outside" selectedKeys={new Set([form.type])} onSelectionChange={(keys) => { const k = Array.from(keys as Set<string>)[0]; setForm((f) => ({ ...f, type: k ?? f.type })); }} items={[{ key: "SISWA", label: "SISWA" }, { key: "GURU", label: "GURU" }, { key: "STAFF", label: "STAFF" }, { key: "ADMIN", label: "ADMIN" }]}>
               {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}

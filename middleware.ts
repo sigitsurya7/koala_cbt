@@ -1,21 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify, SignJWT } from "jose";
 
-// Define routes that require authentication
-const PROTECTED_PREFIXES = [
-  "/dashboard",
-  "/tasks",
-  "/settings",
-  "/ujian",
-  "/manajemen",
-  "/projects",
-  "/team",
-  "/calendar",
-  "/profile",
-  "/admin",
-];
-
-const AUTH_ROUTES = ["/login"]; // redirect away if already logged in
+// Pages allowed without auth
+const PUBLIC_ROUTES = ["/login"]; // redirect away if already logged-in
 
 const ACCESS_COOKIE = "access_token";
 const REFRESH_COOKIE = "refresh_token";
@@ -52,8 +39,7 @@ async function signAccess(payload: Record<string, any>) {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  const isProtected = PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
-  const isAuthRoute = AUTH_ROUTES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  const isAuthRoute = PUBLIC_ROUTES.some((p) => pathname === p || pathname.startsWith(p + "/"));
 
   const access = req.cookies.get(ACCESS_COOKIE)?.value;
   const refresh = req.cookies.get(REFRESH_COOKIE)?.value;
@@ -68,11 +54,8 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // For protected pages: require valid access token only (no refresh fallback here)
-  if (isProtected) {
-    if (isLoggedIn) return NextResponse.next();
-
-    // No valid tokens -> redirect to login
+  // Protect all routes except PUBLIC_ROUTES
+  if (!isAuthRoute && !isLoggedIn) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);

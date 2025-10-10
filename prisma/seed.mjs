@@ -135,6 +135,7 @@ try {
     { name: 'Jurusan', key: 'jurusan', path: '/master/jurusan', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Kelas', key: 'kelas', path: '/master/kelas', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Ruangan', key: 'ruangan', path: '/master/ruangan', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Bank Soal', key: 'bank_soal', path: '/master/bank_soal', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Resource', key: 'resource', path: '/settings/resource', icon: null, order: 3, parentKey: 'settings', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Sekolah', key: 'sekolah', path: '/settings/school', icon: null, order: 2, parentKey: 'settings', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Role', key: 'role', path: '/settings/role', icon: null, order: 1, parentKey: 'settings', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
@@ -235,6 +236,25 @@ try {
     { name: "Buat Setting Sekolah", action: "CREATE", resource: "API/SCHOOL_SETTINGS" },
     { name: "Ubah Setting Sekolah", action: "UPDATE", resource: "API/SCHOOL_SETTINGS" },
     { name: "Hapus Setting Sekolah", action: "DELETE", resource: "API/SCHOOL_SETTINGS" },
+    // Subjects
+    { name: "Lihat Mapel", action: "READ", resource: "API/SUBJECTS" },
+    { name: "Buat Mapel", action: "CREATE", resource: "API/SUBJECTS" },
+    { name: "Ubah Mapel", action: "UPDATE", resource: "API/SUBJECTS" },
+    { name: "Hapus Mapel", action: "DELETE", resource: "API/SUBJECTS" },
+    // Classes
+    { name: "Lihat Kelas", action: "READ", resource: "API/CLASSES" },
+    { name: "Buat Kelas", action: "CREATE", resource: "API/CLASSES" },
+    { name: "Ubah Kelas", action: "UPDATE", resource: "API/CLASSES" },
+    { name: "Hapus Kelas", action: "DELETE", resource: "API/CLASSES" },
+    // Academic Years & Periods
+    { name: "Lihat Tahun Ajaran", action: "READ", resource: "API/ACADEMIC_YEARS" },
+    { name: "Buat Tahun Ajaran", action: "CREATE", resource: "API/ACADEMIC_YEARS" },
+    { name: "Ubah Tahun Ajaran", action: "UPDATE", resource: "API/ACADEMIC_YEARS" },
+    { name: "Hapus Tahun Ajaran", action: "DELETE", resource: "API/ACADEMIC_YEARS" },
+    { name: "Lihat Periode", action: "READ", resource: "API/PERIODS" },
+    { name: "Buat Periode", action: "CREATE", resource: "API/PERIODS" },
+    { name: "Ubah Periode", action: "UPDATE", resource: "API/PERIODS" },
+    { name: "Hapus Periode", action: "DELETE", resource: "API/PERIODS" },
     // Role users assignment
     { name: "Lihat User per Role", action: "READ", resource: "API/ROLES_USERS" },
     { name: "Atur User per Role", action: "UPDATE", resource: "API/ROLES_USERS" },
@@ -263,6 +283,10 @@ try {
     "API/ROOMS",
     "API/SCHOOL_SETTINGS",
     "API/ROLES_USERS",
+    "API/SUBJECTS",
+    "API/CLASSES",
+    "API/ACADEMIC_YEARS",
+    "API/PERIODS",
     "API/QUESTIONS",
     "API/EXAMS",
     "API/ATTEMPTS",
@@ -273,6 +297,22 @@ try {
   }
   const dash = await prisma.menu.findUnique({ where: { key: "dashboard" } });
   if (dash) await prisma.roleMenu.upsert({ where: { roleId_menuId: { roleId: adminRole.id, menuId: dash.id } }, update: {}, create: { roleId: adminRole.id, menuId: dash.id } });
+
+  // Link Bank Soal menu to ADMIN_SCHOOL, GURU, STAFF
+  const bankSoal = await prisma.menu.findUnique({ where: { key: 'bank_soal' } });
+  if (bankSoal) {
+    // roles: [0]=ADMIN_SCHOOL, [1]=GURU, [2]=SISWA, [3]=STAFF
+    const adminSchool = roles[0];
+    const guru = roles[1];
+    const staff = roles[3];
+    for (const r of [adminSchool, guru, staff]) {
+      await prisma.roleMenu.upsert({
+        where: { roleId_menuId: { roleId: r.id, menuId: bankSoal.id } },
+        update: {},
+        create: { roleId: r.id, menuId: bankSoal.id },
+      });
+    }
+  }
 
   console.log("Seed selesai.");
 } catch (e) {

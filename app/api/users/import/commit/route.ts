@@ -58,6 +58,8 @@ export async function POST(req: NextRequest) {
             address: it.address ?? undefined,
           },
         });
+        // Create membership mapping to make it appear in user listing per school
+        await tx.userSchool.create({ data: { userId: user.id, schoolId: it.schoolId, classId: it.classId ?? null, isActive: true } });
         inserted++;
       }
       return inserted;

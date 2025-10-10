@@ -49,8 +49,9 @@ export async function requirePermission(
   // Find permission definition
   const perm = await prisma.permission.findFirst({ where: { action, resource }, select: { id: true } });
   if (!perm) {
-    // If no permission is defined for this resource/action: allow by default (configurable)
-    if (opts?.allowIfNoPermissionDefined ?? true) return null;
+    // Secure-by-default: deny unless explicitly allowed by env/flag
+    const allowEnv = String(process.env.ACL_ALLOW_IF_UNDEFINED || "false").toLowerCase() === "true";
+    if (opts?.allowIfNoPermissionDefined ?? allowEnv) return null;
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
@@ -63,4 +64,3 @@ export async function requirePermission(
 
   return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 }
-

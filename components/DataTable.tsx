@@ -125,7 +125,7 @@ export default function DataTable<T>({
                       }}
                     >
                       {c.header}
-                      {sortKey === c.key ? (order === "asc" ? " ▲" : " ▼") : ""}
+                      {sortKey === c.key ? (order === "asc" ? " �-�" : " �-�") : ""}
                     </button>
                   ) : c.header}
                 </TableColumn>
@@ -165,3 +165,4 @@ export default function DataTable<T>({
     </Card>
   );
 }
+

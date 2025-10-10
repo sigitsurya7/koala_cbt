@@ -7,7 +7,8 @@ import toast from "react-hot-toast";
 import RoleModal, { RoleForm } from "./components/RoleModal";
 import DataTable, { type FetchParams, type Paged } from "@/components/DataTable";
 import RoleMenuModal from "./components/RoleMenuModal";
-import { FiEdit, FiMenu, FiPlus } from "react-icons/fi";
+import { FiEdit, FiMenu, FiPlus, FiUsers } from "react-icons/fi";
+import RoleUsersModal from "./components/RoleUsersModal";
 
 type Role = { id: string; name: string; key: string; scope: string; schoolId?: string | null; schoolName?: string | null };
 
@@ -17,6 +18,8 @@ export default function RoleSettingsPage() {
   const [editing, setEditing] = useState<RoleForm | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuRole, setMenuRole] = useState<{ id: string; name: string } | null>(null);
+  const [usersOpen, setUsersOpen] = useState(false);
+  const [usersRole, setUsersRole] = useState<{ id: string; name: string } | null>(null);
 
   return (
     <div className="space-y-6">
@@ -41,6 +44,7 @@ export default function RoleSettingsPage() {
               <div className="flex gap-2">
                 <Button size="sm" startContent={<FiEdit />} color="secondary" variant="flat" onPress={() => { setEditing({ id: r.id, name: r.name, key: r.key, scope: r.scope as any, schoolId: r.schoolId ?? null }); setOpen(true); }}>Edit</Button>
                 <Button size="sm" startContent={<FiMenu />} variant="flat" onPress={() => { setMenuRole({ id: r.id, name: r.name }); setMenuOpen(true); }}>Menu</Button>
+                <Button size="sm" startContent={<FiUsers />} variant="flat" onPress={() => { setUsersRole({ id: r.id, name: r.name }); setUsersOpen(true); }}>Users</Button>
               </div>
             ),
           },
@@ -55,6 +59,7 @@ export default function RoleSettingsPage() {
 
       <RoleModal isOpen={isOpen} onOpenChange={setOpen} onSaved={() => setReloadKey((k) => k + 1)} initial={editing} />
       <RoleMenuModal isOpen={menuOpen} onOpenChange={setMenuOpen} onSaved={() => setReloadKey((k) => k + 1)} roleId={menuRole?.id ?? null} roleName={menuRole?.name} />
+      <RoleUsersModal isOpen={usersOpen} onOpenChange={setUsersOpen} roleId={usersRole?.id ?? null} roleName={usersRole?.name ?? undefined} />
     </div>
   );
 }

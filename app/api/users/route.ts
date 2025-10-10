@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { buildOrderBy, buildSearchWhere, pageToSkipTake, parsePageQuery } from "@/lib/pagination";
 import { requirePermission } from "@/lib/acl";
-import { enforceActiveSchool } from "@/lib/tenant";
+import { enforceActiveSchool, getUserFromRequest } from "@/lib/tenant";
 import { assertCsrf } from "@/lib/csrf";
 import { z } from "zod";
 import { handleApiError, zparse } from "@/lib/validate";
@@ -12,10 +12,20 @@ import bcrypt from "bcryptjs";
 export async function GET(req: NextRequest) {
   const deny = await requirePermission(req, { action: "READ", resource: "API/USERS" });
   if (deny) return deny;
-  const ensured = await enforceActiveSchool(req);
-  if (ensured instanceof NextResponse) return ensured;
+  const user = await getUserFromRequest(req);
+  const { searchParams } = new URL(req.url);
+  const filterSchoolId = searchParams.get("schoolId") || undefined;
+  let ensuredSchoolId: string | null = null;
+  if (!user?.isSuperAdmin) {
+    const ensured = await enforceActiveSchool(req);
+    if (ensured instanceof NextResponse) return ensured;
+    ensuredSchoolId = ensured.schoolId;
+  } else {
+    ensuredSchoolId = filterSchoolId || null; // superadmin boleh tanpa filter
+  }
   const { page, perPage, q, sort, order } = parsePageQuery(req);
-  const where: any = { ...(buildSearchWhere(["name", "email"], q) as any), schools: { some: { schoolId: ensured.schoolId } } };
+  const base: any = { ...(buildSearchWhere(["name", "email"], q) as any) };
+  const where: any = ensuredSchoolId ? { ...base, schools: { some: { schoolId: ensuredSchoolId } } } : base;
   const total = await prisma.user.count({ where });
   const { skip, take } = pageToSkipTake(page, perPage);
   const users = await prisma.user.findMany({
@@ -65,10 +75,13 @@ export async function POST(req: NextRequest) {
     if (!isSuperAdmin && detailSchoolId && typeof detailSchoolId === "string") {
       if (type === "SISWA") {
         await prisma.studentDetail.create({ data: { userId: created.id, schoolId: detailSchoolId } });
+        await prisma.userSchool.create({ data: { userId: created.id, schoolId: detailSchoolId, classId: null } });
       } else if (type === "GURU") {
         await prisma.teacherDetail.create({ data: { userId: created.id, schoolId: detailSchoolId } });
+        await prisma.userSchool.create({ data: { userId: created.id, schoolId: detailSchoolId, classId: null } });
       } else if (type === "STAFF") {
         await prisma.staffDetail.create({ data: { userId: created.id, schoolId: detailSchoolId } });
+        await prisma.userSchool.create({ data: { userId: created.id, schoolId: detailSchoolId, classId: null } });
       }
     }
     return NextResponse.json({ id: created.id });

@@ -7,6 +7,8 @@ import { enforceActiveSchool } from "@/lib/tenant";
 import { assertCsrf } from "@/lib/csrf";
 import { z } from "zod";
 import { handleApiError, zparse } from "@/lib/validate";
+import { ACCESS_COOKIE, verifyAccessToken } from "@/lib/auth";
+import { prisma as _prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   const deny = await requirePermission(req, { action: "READ", resource: "API/QUESTIONS" });
@@ -14,10 +16,12 @@ export async function GET(req: NextRequest) {
   const ensured = await enforceActiveSchool(req);
   if (ensured instanceof NextResponse) return ensured;
   const { q, page, perPage } = parsePageQuery(req);
-  const where: any = { schoolId: ensured.schoolId, ...(buildSearchWhere(["text"], q) as any) };
+  const { searchParams } = new URL(req.url);
+  const subjectId = searchParams.get("subjectId") || undefined;
+  const where: any = { schoolId: ensured.schoolId, ...(subjectId ? { subjectId } : {}), ...(buildSearchWhere(["text"], q) as any) };
   const total = await prisma.question.count({ where });
   const { skip, take } = pageToSkipTake(page, perPage);
-  const data = await prisma.question.findMany({ where, orderBy: [{ createdAt: "desc" }], skip, take, select: { id: true, type: true, text: true, points: true } });
+  const data = await prisma.question.findMany({ where, orderBy: [{ createdAt: "asc" }], skip, take, select: { id: true, type: true, text: true, points: true, difficulty: true, options: true, correctKey: true, subjectId: true } });
   return NextResponse.json({ data, page, perPage, total, totalPages: Math.ceil(total / perPage) });
 }
 
@@ -39,6 +43,11 @@ export async function POST(req: NextRequest) {
       difficulty: z.number().int().min(0).max(10).default(1),
     });
     const body = zparse(schema, await req.json());
+    const token = req.cookies.get(ACCESS_COOKIE)?.value;
+    const payload = token ? await verifyAccessToken(token) : null;
+    // tenant check: subject must belong to active school
+    const subj = await prisma.subject.findUnique({ where: { id: body.subjectId }, select: { schoolId: true } });
+    if (!subj || subj.schoolId !== ensured.schoolId) return NextResponse.json({ message: "Subject tidak valid untuk sekolah aktif" }, { status: 400 });
     const created = await prisma.question.create({
       data: {
         schoolId: ensured.schoolId,
@@ -49,6 +58,7 @@ export async function POST(req: NextRequest) {
         correctKey: body.correctKey,
         points: body.points,
         difficulty: body.difficulty,
+        createdById: payload?.sub || undefined,
       },
       select: { id: true },
     });
