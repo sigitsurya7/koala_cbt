@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { useAuth } from "@/stores/useAuth";
 import { useApp } from "@/stores/useApp";
+import { useMenu } from "@/stores/useMenu";
 
 type NavbarKoalaProps = {
   onToggleSidebar?: () => void;
@@ -27,6 +28,7 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
   const router = useRouter();
   const { logout } = useAuth();
   const app = useApp();
+  const menuStore = useMenu();
 
   const handleAction = async (key: any) => {
     try {
@@ -74,10 +76,15 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
                   {app.schools.find((s) => s.id === app.activeSchoolId)?.code || app.schools[0]?.code || "SEKOLAH"}
                 </Button>
               </DropdownTrigger>
-              <DropdownMenu aria-label="Daftar Sekolah" onAction={async (key) => {
-                await app.setActiveSchool(String(key));
-                toast.success("Sekolah aktif diperbarui");
-              }}>
+              <DropdownMenu
+                aria-label="Daftar Sekolah"
+                onAction={async (key) => {
+                  const target = String(key);
+                  await app.setActiveSchool(target);
+                  await menuStore.load();
+                  toast.success("Sekolah aktif diperbarui");
+                }}
+              >
                 {app.schools.map((s) => (
                   <DropdownItem key={s.id} textValue={s.name} aria-label={`Pilih ${s.name}`}>
                     {s.name} ({s.code})
@@ -119,4 +126,3 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
     </Navbar>
   );
 }
-

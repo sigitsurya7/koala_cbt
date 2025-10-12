@@ -17,17 +17,143 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       name: z.string().trim().min(1).optional(),
       email: z.string().email().optional(),
       password: z.string().min(6).optional(),
-      type: z.enum(["SISWA","GURU","STAFF","ADMIN"]).optional(),
+      type: z.enum(["SISWA", "GURU", "STAFF", "ADMIN"]).optional(),
       isSuperAdmin: z.boolean().optional(),
+      isActive: z.boolean().optional(),
+      schoolId: z.string().optional().nullable(),
+      roleId: z.string().optional().nullable(),
     });
-    const { name, email, password, type, isSuperAdmin } = zparse(schema, await req.json());
-    const data: any = {};
-    if (name !== undefined) data.name = name;
-    if (email !== undefined) data.email = email;
-    if (type !== undefined) data.type = type;
-    if (isSuperAdmin !== undefined) data.isSuperAdmin = isSuperAdmin;
-    if (password) data.passwordHash = await bcrypt.hash(password, 10);
-    await prisma.user.update({ where: { id: params.id }, data });
+    const payload = zparse(schema, await req.json());
+    const user = await prisma.user.findUnique({
+      where: { id: params.id },
+      include: {
+        userRoles: true,
+        schools: true,
+      },
+    });
+    if (!user) return NextResponse.json({ message: "User tidak ditemukan" }, { status: 404 });
+
+    const finalIsSuperAdmin = payload.isSuperAdmin ?? user.isSuperAdmin;
+    const finalType = finalIsSuperAdmin ? "ADMIN" : payload.type ?? user.type;
+    const targetSchoolId =
+      finalIsSuperAdmin ? null : payload.schoolId ?? user.schools[0]?.schoolId ?? null;
+
+    let targetRoleId: string | null = null;
+    if (!finalIsSuperAdmin) {
+      if (!targetSchoolId) {
+        return NextResponse.json({ message: "Sekolah wajib dipilih" }, { status: 400 });
+      }
+      const school = await prisma.school.findUnique({ where: { id: targetSchoolId } });
+      if (!school) return NextResponse.json({ message: "Sekolah tidak ditemukan" }, { status: 404 });
+
+      if (finalType === "SISWA") {
+        const siswaRole = await prisma.role.findFirst({
+          where: { key: "SISWA", schoolId: targetSchoolId },
+          select: { id: true },
+        });
+        if (!siswaRole) {
+          return NextResponse.json({ message: "Role SISWA tidak ditemukan di sekolah ini" }, { status: 400 });
+        }
+        targetRoleId = siswaRole.id;
+      } else {
+        const candidateRoleId = payload.roleId ?? user.userRoles.find((r) => r.schoolId === targetSchoolId)?.roleId ?? null;
+        if (!candidateRoleId) {
+          return NextResponse.json({ message: "Role wajib dipilih" }, { status: 400 });
+        }
+        const role = await prisma.role.findFirst({
+          where: {
+            id: candidateRoleId,
+            OR: [{ schoolId: targetSchoolId }, { schoolId: null }],
+          },
+          select: { id: true },
+        });
+        if (!role) return NextResponse.json({ message: "Role tidak valid untuk sekolah ini" }, { status: 400 });
+        targetRoleId = role.id;
+      }
+    }
+
+    const updateData: any = {};
+    if (payload.name !== undefined) updateData.name = payload.name;
+    if (payload.email !== undefined) updateData.email = payload.email;
+    if (payload.isActive !== undefined) updateData.isActive = payload.isActive;
+    updateData.type = finalType;
+    updateData.isSuperAdmin = finalIsSuperAdmin;
+    if (payload.password) updateData.passwordHash = await bcrypt.hash(payload.password, 10);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: params.id }, data: updateData });
+
+      if (finalIsSuperAdmin) {
+        await Promise.all([
+          tx.userSchool.deleteMany({ where: { userId: params.id } }),
+          tx.userRole.deleteMany({ where: { userId: params.id } }),
+          tx.studentDetail.deleteMany({ where: { userId: params.id } }),
+          tx.teacherDetail.deleteMany({ where: { userId: params.id } }),
+          tx.staffDetail.deleteMany({ where: { userId: params.id } }),
+        ]);
+        return;
+      }
+
+      const ensureMembership = async () => {
+        if (!targetSchoolId) return;
+        const existing = await tx.userSchool.findFirst({ where: { userId: params.id, schoolId: targetSchoolId } });
+        if (existing) {
+          await tx.userSchool.updateMany({
+            where: { userId: params.id, schoolId: targetSchoolId },
+            data: { isActive: true },
+          });
+        } else {
+          await tx.userSchool.create({
+            data: { userId: params.id, schoolId: targetSchoolId, classId: null, isActive: true },
+          });
+        }
+        await tx.userSchool.deleteMany({
+          where: { userId: params.id, schoolId: { not: targetSchoolId } },
+        });
+      };
+
+      await ensureMembership();
+
+      if (targetSchoolId && targetRoleId) {
+        await tx.userRole.deleteMany({ where: { userId: params.id, schoolId: targetSchoolId } });
+        await tx.userRole.create({
+          data: { userId: params.id, roleId: targetRoleId, schoolId: targetSchoolId },
+        });
+      }
+
+      if (finalType === "SISWA") {
+        await tx.studentDetail.upsert({
+          where: { userId: params.id },
+          update: { schoolId: targetSchoolId! },
+          create: { userId: params.id, schoolId: targetSchoolId! },
+        });
+        await tx.teacherDetail.deleteMany({ where: { userId: params.id } });
+        await tx.staffDetail.deleteMany({ where: { userId: params.id } });
+      } else if (finalType === "GURU") {
+        await tx.teacherDetail.upsert({
+          where: { userId_schoolId: { userId: params.id, schoolId: targetSchoolId! } },
+          update: { schoolId: targetSchoolId! },
+          create: { userId: params.id, schoolId: targetSchoolId! },
+        });
+        await tx.studentDetail.deleteMany({ where: { userId: params.id } });
+        await tx.staffDetail.deleteMany({ where: { userId: params.id } });
+      } else if (finalType === "STAFF") {
+        await tx.staffDetail.upsert({
+          where: { userId_schoolId: { userId: params.id, schoolId: targetSchoolId! } },
+          update: { schoolId: targetSchoolId! },
+          create: { userId: params.id, schoolId: targetSchoolId! },
+        });
+        await tx.studentDetail.deleteMany({ where: { userId: params.id } });
+        await tx.teacherDetail.deleteMany({ where: { userId: params.id } });
+      } else {
+        await Promise.all([
+          tx.studentDetail.deleteMany({ where: { userId: params.id } }),
+          tx.teacherDetail.deleteMany({ where: { userId: params.id } }),
+          tx.staffDetail.deleteMany({ where: { userId: params.id } }),
+        ]);
+      }
+    });
+
     return NextResponse.json({ id: params.id });
   } catch (e: any) {
     return handleApiError(e);

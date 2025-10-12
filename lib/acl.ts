@@ -39,12 +39,22 @@ export async function requirePermission(
     return NextResponse.json({ message: "Unauthenticated" }, { status: 401 });
   }
 
+  if (Array.isArray(payload.permissions) && payload.permissions.includes("*")) {
+    return null;
+  }
+
   const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, isSuperAdmin: true } });
   if (!user) return NextResponse.json({ message: "Unauthenticated" }, { status: 401 });
   if (user.isSuperAdmin) return null;
 
   const action = (opts?.action || getActionFromMethod(req.method)).toUpperCase();
   const resource = (opts?.resource || getResourceCode(req)).toUpperCase();
+  const permissionKey = `${action}_${resource}`;
+
+  const payloadPermissions = new Set<string>(Array.isArray(payload.permissions) ? payload.permissions : []);
+  if (payloadPermissions.has(permissionKey)) {
+    return null;
+  }
 
   // Find permission definition
   const perm = await prisma.permission.findFirst({ where: { action, resource }, select: { id: true } });

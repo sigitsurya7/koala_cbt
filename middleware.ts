@@ -67,6 +67,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/|favicon.ico|api/).*)", // run on pages except Next assets and api
+    "/((?!_next/|favicon.ico|api/|koala-login-illustration\\.png|koala-login-illustration-dark\\.png).*)",
   ],
 };

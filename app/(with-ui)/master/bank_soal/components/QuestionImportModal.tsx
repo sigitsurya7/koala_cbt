@@ -7,11 +7,11 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { FiUpload, FiDownload, FiAlertTriangle } from "react-icons/fi";
 
-type Props = { isOpen: boolean; onOpenChange: (v: boolean) => void; subjectId: string | null; subjectName?: string | null; onImported?: () => void };
+type Props = { isOpen: boolean; onOpenChange: (v: boolean) => void; subjectId: string | null; subjectName?: string | null; schoolId?: string | null; onImported?: () => void };
 
 type Row = { type?: string; text?: string; A?: string; B?: string; C?: string; D?: string; E?: string; correctKey?: string; points?: number; difficulty?: number };
 
-export default function QuestionImportModal({ isOpen, onOpenChange, subjectId, subjectName, onImported }: Props) {
+export default function QuestionImportModal({ isOpen, onOpenChange, subjectId, subjectName, schoolId, onImported }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
   const [preview, setPreview] = useState<any[]>([]);
   const [errors, setErrors] = useState<Array<{ row: number; message: string }>>([]);
@@ -49,9 +49,10 @@ export default function QuestionImportModal({ isOpen, onOpenChange, subjectId, s
 
   const validate = async () => {
     if (!subjectId || rows.length === 0) { toast.error("Pilih subject & upload file"); return; }
+    if (!schoolId) { toast.error("Sekolah belum dipilih"); return; }
     setLoading(true);
     try {
-      const res = await axios.post("/api/questions/import/validate", { subjectId, rows });
+      const res = await axios.post("/api/questions/import/validate", { subjectId, rows, schoolId });
       setErrors(res.data.errors || []);
       if (res.data.ok) { setPreview(res.data.items); toast.success("Validasi OK, siap import"); }
       else { toast.error("Ada error pada data. Perbaiki terlebih dahulu"); }
@@ -62,9 +63,10 @@ export default function QuestionImportModal({ isOpen, onOpenChange, subjectId, s
   const startJob = async () => {
     if (errors.length > 0) { toast.error("Masih ada error. Perbaiki dulu"); return; }
     if (preview.length === 0) { toast.error("Tidak ada data yang valid"); return; }
+    if (!schoolId) { toast.error("Sekolah belum dipilih"); return; }
     setIsImporting(true);
     try {
-      const res = await axios.post("/api/questions/import/job/start", { items: preview });
+      const res = await axios.post("/api/questions/import/job/start", { items: preview, schoolId });
       const id = res.data.jobId as string;
       setJobId(id); setJobStatus("pending"); setJobProcessed(0); setJobTotal(preview.length);
       const es = new EventSource(`/api/questions/import/job/events?jobId=${id}`);
@@ -96,7 +98,7 @@ export default function QuestionImportModal({ isOpen, onOpenChange, subjectId, s
             const timer = setInterval(() => {
               if (idx < preview.length) { setImportingName(preview[idx].text || ""); setJobProcessed(idx + 1); idx++; }
             }, 200);
-            const r = await axios.post("/api/questions/import/commit", { items: preview });
+            const r = await axios.post("/api/questions/import/commit", { items: preview, schoolId });
             clearInterval(timer);
             if (r.data?.ok) { setJobStatus("completed"); setJobProcessed(preview.length); toast.success("Import selesai"); onImported && onImported(); }
             else {

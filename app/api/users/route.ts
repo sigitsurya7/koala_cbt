@@ -37,12 +37,38 @@ export async function GET(req: NextRequest) {
       email: true,
       type: true,
       isSuperAdmin: true,
-      schools: { include: { school: { select: { name: true, code: true } } }, take: 1 },
+      isActive: true,
+      schools: {
+        include: { school: { select: { id: true, name: true, code: true } } },
+        take: 1,
+      },
+      userRoles: {
+        where: ensuredSchoolId ? { schoolId: ensuredSchoolId } : undefined,
+        include: { role: { select: { id: true, name: true, key: true } } },
+        take: 1,
+      },
     },
     skip,
     take,
   });
-  const rows = users.map((u) => ({ id: u.id, name: u.name, email: u.email, type: u.type, isSuperAdmin: u.isSuperAdmin, schoolName: u.schools[0]?.school?.name ?? null, schoolCode: u.schools[0]?.school?.code ?? null }));
+  const rows = users.map((u) => {
+    const primarySchool = u.schools[0] ?? null;
+    const primaryRole = u.userRoles[0]?.role ?? null;
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      type: u.type,
+      isSuperAdmin: u.isSuperAdmin,
+      isActive: u.isActive,
+      schoolId: primarySchool?.school?.id ?? null,
+      schoolName: primarySchool?.school?.name ?? null,
+      schoolCode: primarySchool?.school?.code ?? null,
+      roleId: primaryRole?.id ?? null,
+      roleName: primaryRole?.name ?? null,
+      roleKey: primaryRole?.key ?? null,
+    };
+  });
   return NextResponse.json({ data: rows, page, perPage, total, totalPages: Math.ceil(total / perPage) });
 }
 
@@ -57,34 +83,114 @@ export async function POST(req: NextRequest) {
       email: z.string().email(),
       username: z.string().regex(/^[a-z0-9](?:[a-z0-9_]{1,30}[a-z0-9])?$/i).optional(),
       password: z.string().min(6),
-      type: z.enum(["SISWA","GURU","STAFF","ADMIN"]).optional(),
+      type: z.enum(["SISWA", "GURU", "STAFF", "ADMIN"]).optional(),
       isSuperAdmin: z.boolean().optional(),
-      detailSchoolId: z.string().optional(),
+      isActive: z.boolean().optional(),
+      schoolId: z.string().optional().nullable(),
+      roleId: z.string().optional().nullable(),
+      detailSchoolId: z.string().optional(), // backward compatibility
     });
-    const { name, email, username, password, type = "SISWA", isSuperAdmin = false, detailSchoolId } = zparse(schema, await req.json());
-    // Username validation if provided
+    const parsed = zparse(schema, await req.json());
+    const {
+      name,
+      email,
+      username,
+      password,
+      isSuperAdmin: isSuperAdminRaw = false,
+      isActive: isActiveRaw,
+      roleId,
+    } = parsed;
+    const requestedType = parsed.type ?? "SISWA";
+    const requestedSchoolId = parsed.schoolId ?? parsed.detailSchoolId ?? null;
+    const isSuperAdmin = !!isSuperAdminRaw;
+    const finalType = isSuperAdmin ? "ADMIN" : requestedType;
+    const isActive = isActiveRaw ?? true;
+
     if (username) {
       const exist = await prisma.user.findUnique({ where: { username } });
       if (exist) return NextResponse.json({ message: "Username sudah digunakan" }, { status: 400 });
     }
+
     const passwordHash = await bcrypt.hash(password, 10);
-    const created = await prisma.user.create({ data: { name, email, username: username || null, passwordHash, type, isSuperAdmin } });
-    // Create base UserDetail with fullName defaulting to name
-    await prisma.userDetail.create({ data: { userId: created.id, fullName: name } });
-    // Optionally create typed detail if school provided
-    if (!isSuperAdmin && detailSchoolId && typeof detailSchoolId === "string") {
-      if (type === "SISWA") {
-        await prisma.studentDetail.create({ data: { userId: created.id, schoolId: detailSchoolId } });
-        await prisma.userSchool.create({ data: { userId: created.id, schoolId: detailSchoolId, classId: null } });
-      } else if (type === "GURU") {
-        await prisma.teacherDetail.create({ data: { userId: created.id, schoolId: detailSchoolId } });
-        await prisma.userSchool.create({ data: { userId: created.id, schoolId: detailSchoolId, classId: null } });
-      } else if (type === "STAFF") {
-        await prisma.staffDetail.create({ data: { userId: created.id, schoolId: detailSchoolId } });
-        await prisma.userSchool.create({ data: { userId: created.id, schoolId: detailSchoolId, classId: null } });
+
+    let targetRoleIdForCreation: string | null = null;
+    const schoolIdForUser = isSuperAdmin ? null : requestedSchoolId;
+
+    if (!isSuperAdmin) {
+      if (!schoolIdForUser) {
+        return NextResponse.json({ message: "Sekolah wajib dipilih" }, { status: 400 });
+      }
+      const school = await prisma.school.findUnique({ where: { id: schoolIdForUser } });
+      if (!school) {
+        return NextResponse.json({ message: "Sekolah tidak ditemukan" }, { status: 404 });
+      }
+
+      if (finalType === "SISWA") {
+        const siswaRole = await prisma.role.findFirst({
+          where: { key: "SISWA", schoolId: schoolIdForUser },
+          select: { id: true },
+        });
+        if (!siswaRole) {
+          return NextResponse.json({ message: "Role SISWA tidak ditemukan di sekolah ini" }, { status: 400 });
+        }
+        targetRoleIdForCreation = siswaRole.id;
+      } else {
+        if (!roleId) {
+          return NextResponse.json({ message: "Role wajib dipilih" }, { status: 400 });
+        }
+        const role = await prisma.role.findFirst({
+          where: {
+            id: roleId,
+            OR: [{ schoolId: schoolIdForUser }, { schoolId: null }],
+          },
+          select: { id: true },
+        });
+        if (!role) {
+          return NextResponse.json({ message: "Role tidak valid untuk sekolah ini" }, { status: 400 });
+        }
+        targetRoleIdForCreation = role.id;
       }
     }
-    return NextResponse.json({ id: created.id });
+
+    const result = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          name,
+          email,
+          username: username || null,
+          passwordHash,
+          type: finalType,
+          isSuperAdmin,
+          isActive,
+        },
+      });
+
+      await tx.userDetail.create({ data: { userId: created.id, fullName: name } });
+
+      if (!isSuperAdmin && schoolIdForUser) {
+        await tx.userSchool.create({
+          data: { userId: created.id, schoolId: schoolIdForUser, classId: null, isActive: true },
+        });
+
+        if (targetRoleIdForCreation) {
+          await tx.userRole.create({
+            data: { userId: created.id, roleId: targetRoleIdForCreation, schoolId: schoolIdForUser },
+          });
+        }
+
+        if (finalType === "SISWA") {
+          await tx.studentDetail.create({ data: { userId: created.id, schoolId: schoolIdForUser } });
+        } else if (finalType === "GURU") {
+          await tx.teacherDetail.create({ data: { userId: created.id, schoolId: schoolIdForUser } });
+        } else if (finalType === "STAFF") {
+          await tx.staffDetail.create({ data: { userId: created.id, schoolId: schoolIdForUser } });
+        }
+      }
+
+      return created;
+    });
+
+    return NextResponse.json({ id: result.id });
   } catch (e: any) {
     return handleApiError(e);
   }

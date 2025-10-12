@@ -7,6 +7,7 @@ import { Button, Card, CardBody, Chip, Input, Select, SelectItem, Textarea, Moda
 import toast from "react-hot-toast";
 import { FiArrowLeft, FiArrowRight, FiMenu, FiPlus, FiSave, FiTrash, FiUpload } from "react-icons/fi";
 import QuestionImportModal from "../components/QuestionImportModal";
+import { useApp } from "@/stores/useApp";
 
 type Subject = { id: string; name: string; grade?: number | null; departmentName?: string | null };
 type MCQOption = { key: string; text: string };
@@ -22,6 +23,24 @@ export default function QuestionBuilderPage() {
   const subjectId = String(params?.id || "");
   const draftKey = `bankSoalDraft:${subjectId}`;
 
+  const app = useApp();
+  const isSuperAdmin = !!app.user?.isSuperAdmin;
+  const schools = useMemo(() => app.schools || [], [app.schools]);
+  const activeSchoolId = app.activeSchoolId || "";
+  const setActiveSchool = app.setActiveSchool;
+
+  useEffect(() => {
+    if (isSuperAdmin && !activeSchoolId && schools.length > 0) {
+      setActiveSchool(schools[0].id).catch(() => {});
+    }
+  }, [isSuperAdmin, activeSchoolId, schools, setActiveSchool]);
+
+  const schoolId = useMemo(() => {
+    if (activeSchoolId) return activeSchoolId;
+    if (isSuperAdmin && schools.length > 0) return schools[0].id;
+    return "";
+  }, [activeSchoolId, isSuperAdmin, schools]);
+
   const [subject, setSubject] = useState<Subject | null>(null);
   const [items, setItems] = useState<DraftItem[]>([]);
   const [index, setIndex] = useState(0);
@@ -31,15 +50,16 @@ export default function QuestionBuilderPage() {
 
   // Load subject and existing questions (then optionally offer draft)
   useEffect(() => {
+    if (!subjectId || !schoolId) return;
     let mounted = true;
     const load = async () => {
       try {
-        const r = await axios.get(`/api/subjects/${subjectId}`);
+        const r = await axios.get(`/api/subjects/${subjectId}${schoolId ? `?schoolId=${schoolId}` : ""}`);
         if (mounted) setSubject(r.data);
       } catch {}
       // Always try to load from server first
       try {
-        const qres = await axios.get(`/api/questions?subjectId=${subjectId}&page=1&perPage=200`);
+        const qres = await axios.get(`/api/questions?subjectId=${subjectId}&page=1&perPage=200${schoolId ? `&schoolId=${schoolId}` : ""}`);
         const arr = (qres.data.data || []) as Array<{ id: string; type: "MCQ"|"ESSAY"; text: string; options?: MCQOption[]; correctKey?: string; points?: number; difficulty?: number }>;
         if (arr.length > 0) {
           const mapped: DraftItem[] = arr.map((q) => q.type === "MCQ"
@@ -63,7 +83,7 @@ export default function QuestionBuilderPage() {
     };
     load();
     return () => { mounted = false; };
-  }, [subjectId]);
+  }, [subjectId, schoolId]);
 
   // beforeunload guard
   useEffect(() => {
@@ -189,7 +209,8 @@ export default function QuestionBuilderPage() {
     try {
       // validate minimal
       if (!subjectId || items.length === 0) { toast.error("Tidak ada soal untuk disimpan"); return; }
-      const payload = { subjectId, items: items.map((it) => (it.type === "MCQ"
+      if (!schoolId) { toast.error("Sekolah belum dipilih"); return; }
+      const payload = { subjectId, schoolId, items: items.map((it) => (it.type === "MCQ"
         ? { id: (it as any).id, type: it.type, text: it.text, options: it.options, correctKey: it.correctKey, points: it.points, difficulty: it.difficulty }
         : { id: (it as any).id, type: it.type, text: it.text, points: it.points, difficulty: it.difficulty })) };
       const res = await axios.post("/api/questions/sync", payload);
@@ -215,7 +236,7 @@ export default function QuestionBuilderPage() {
             {subject && <p className="text-sm opacity-70">Mapel: {subject.name} {subject.grade ? `(Grade ${subject.grade})` : ""} {subject.departmentName ? `• ${subject.departmentName}` : ""}</p>}
           </div>
           <div className="hidden md:flex gap-2">
-            <Button variant="flat" startContent={<FiUpload />} onPress={() => setImportOpen(true)}>Import Excel</Button>
+          <Button variant="flat" startContent={<FiUpload />} onPress={() => setImportOpen(true)} isDisabled={!schoolId}>Import Excel</Button>
             <Button variant="flat" startContent={<FiPlus />} onPress={() => addQuestion("ESSAY")}>Tambah Essay</Button>
             <Button color="secondary" startContent={<FiPlus />} onPress={() => addQuestion("MCQ")}>Tambah Pilihan Ganda</Button>
             <Button color="primary" startContent={<FiSave />} onPress={saveAll}>Simpan Semua</Button>
@@ -226,7 +247,7 @@ export default function QuestionBuilderPage() {
                 <Button isIconOnly><FiMenu /></Button>
               </DropdownTrigger>
               <DropdownMenu aria-label="Static Actions">
-                <DropdownItem key={'import_excel'} startContent={<FiUpload />} onPress={() => setImportOpen(true)}>Import Excel</DropdownItem>
+                  <DropdownItem key={'import_excel'} startContent={<FiUpload />} onPress={() => setImportOpen(true)} isDisabled={!schoolId}>Import Excel</DropdownItem>
                 <DropdownItem key={'tambah_essay'} startContent={<FiPlus />} onPress={() => addQuestion("ESSAY")}>Tambah Essay</DropdownItem>
                 <DropdownItem key={'tambah_pilihan_ganda'} startContent={<FiPlus />} onPress={() => addQuestion("MCQ")}>Tambah Pilihan Ganda</DropdownItem>
                 <DropdownItem className="text-primary" color="success" key={'simpan_semua'} startContent={<FiSave />} onPress={saveAll}>Simpan Semua</DropdownItem>
@@ -418,7 +439,14 @@ export default function QuestionBuilderPage() {
           )}
         </ModalContent>
       </Modal>
-      <QuestionImportModal isOpen={importOpen} onOpenChange={setImportOpen} subjectId={subjectId} subjectName={subject?.name} onImported={() => toast.success("Import selesai")} />
+      <QuestionImportModal
+        isOpen={importOpen}
+        onOpenChange={setImportOpen}
+        subjectId={subjectId}
+        subjectName={subject?.name}
+        schoolId={schoolId}
+        onImported={() => toast.success("Import selesai")}
+      />
     </div>
   );
 }

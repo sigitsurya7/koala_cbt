@@ -19,6 +19,7 @@ type MenuNode = {
   order: number;
   visibility: string;
   needLogin: boolean;
+  menuSuperAdmin: boolean;
   children: MenuNode[];
 };
 
@@ -82,44 +83,26 @@ export async function GET(req: NextRequest) {
   }
 
   // Default: hierarchical nodes for sidebar
-  let isSuper = false;
-  let activeSchoolId: string | null = null;
-  try {
-    const token = req.cookies.get(ACCESS_COOKIE)?.value;
-    const payload = token ? await verifyAccessToken(token) : null;
-    if (payload) {
-      const u = await prisma.user.findUnique({ where: { id: payload.sub }, select: { isSuperAdmin: true } });
-      isSuper = !!u?.isSuperAdmin;
-    }
-    activeSchoolId = req.cookies.get(ACTIVE_SCHOOL_COOKIE)?.value || null;
-  } catch {}
+  const token = req.cookies.get(ACCESS_COOKIE)?.value;
+  const payload = token ? await verifyAccessToken(token) : null;
+  const isSuper = !!payload?.isSuperAdmin;
+  const userId = payload?.sub || null;
+  const activeSchoolId =
+    req.cookies.get(ACTIVE_SCHOOL_COOKIE)?.value ||
+    (!isSuper ? payload?.schoolId ?? null : null);
 
-  // Show all menus for superadmin; non-superadmin cannot see superadmin-only menus
-  const baseWhere: any = isSuper ? { isActive: true } : { isActive: true, menuSuperAdmin: false };
-  const itemsRaw = await prisma.menu.findMany({
-    where: baseWhere,
-    orderBy: [{ order: "asc" }],
+  const allMenus = await prisma.menu.findMany({
+    where: { isActive: true },
+    orderBy: [{ order: "asc" }, { name: "asc" }],
     include: { roleMenus: true },
   });
 
-  let items = itemsRaw;
-  if (!isSuper) {
-    // Filter by role mapping: only include menus linked to any of user's roles
-    const token = req.cookies.get(ACCESS_COOKIE)?.value;
-    const payload = token ? await verifyAccessToken(token) : null;
-    if (payload) {
-      const userRoles = await prisma.userRole.findMany({ where: { userId: payload.sub, OR: [{ schoolId: activeSchoolId }, { schoolId: null }] }, select: { roleId: true } });
-      const roleIds = new Set(userRoles.map((r) => r.roleId));
-      // We will include node if it has mapping OR any child mapped; build after tree build
-    }
-  }
-
-  const byId = new Map(items.map((m) => [m.id, m]));
+  const byId = new Map(allMenus.map((m) => [m.id, m]));
 
   const nodes = new Map<string, MenuNode>();
   const roots: MenuNode[] = [];
 
-  for (const m of items) {
+  for (const m of allMenus) {
     const node: MenuNode = {
       id: m.id,
       name: m.name,
@@ -130,12 +113,13 @@ export async function GET(req: NextRequest) {
       visibility: m.visibility,
       // Heuristic: PRIVATE menus require login. You can later add a field in schema.
       needLogin: m.visibility !== "PUBLIC",
+      menuSuperAdmin: m.menuSuperAdmin ?? false,
       children: [],
     };
     nodes.set(m.id, node);
   }
 
-  for (const m of items) {
+  for (const m of allMenus) {
     const node = nodes.get(m.id)!;
     if (m.parentId && byId.has(m.parentId)) {
       nodes.get(m.parentId)!.children.push(node);
@@ -144,32 +128,48 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  if (!isSuper) {
-    // Filter the tree by role mapping
-    const token = req.cookies.get(ACCESS_COOKIE)?.value;
-    const payload = token ? await verifyAccessToken(token) : null;
-    if (payload) {
-      const userRoles = await prisma.userRole.findMany({ where: { userId: payload.sub, OR: [{ schoolId: activeSchoolId }, { schoolId: null }] }, select: { roleId: true } });
-      const roleIdSet = new Set(userRoles.map((r) => r.roleId));
-      const mapped = new Set<string>();
-      for (const m of items) {
-        if (m.roleMenus?.some((rm) => roleIdSet.has(rm.roleId))) mapped.add(m.id);
+  const filterTree = (arr: MenuNode[], predicate: (node: MenuNode) => boolean): MenuNode[] => {
+    const out: MenuNode[] = [];
+    for (const node of arr) {
+      const children = filterTree(node.children, predicate);
+      if (predicate(node) || children.length > 0) {
+        out.push({ ...node, children });
       }
-      const filterRec = (arr: MenuNode[]): MenuNode[] => {
-        const out: MenuNode[] = [];
-        for (const n of arr) {
-          const has = mapped.has(n.id);
-          const kids = filterRec(n.children);
-          if (has || kids.length > 0) out.push({ ...n, children: kids });
-        }
-        return out;
-      };
-      const filteredRoots = filterRec(roots);
-      return NextResponse.json({ menu: filteredRoots });
+    }
+    return out;
+  };
+
+  if (isSuper) {
+    const superRoots = filterTree(roots, (node) => node.menuSuperAdmin);
+    return NextResponse.json({ menu: superRoots });
+  }
+
+  if (!userId) {
+    // Regular user without session -> empty menu
+    return NextResponse.json({ menu: [] });
+  }
+
+  const userRoles = await prisma.userRole.findMany({
+    where: {
+      userId,
+      OR: [{ schoolId: activeSchoolId }, { schoolId: null }],
+    },
+    select: { roleId: true },
+  });
+  const roleIdSet = new Set(userRoles.map((r) => r.roleId));
+  if (roleIdSet.size === 0) {
+    return NextResponse.json({ menu: [] });
+  }
+
+  const mappedMenuIds = new Set<string>();
+  for (const menu of allMenus) {
+    if (menu.roleMenus?.some((rm) => roleIdSet.has(rm.roleId))) {
+      mappedMenuIds.add(menu.id);
     }
   }
 
-  return NextResponse.json({ menu: roots });
+  const filteredRoots = filterTree(roots, (node) => mappedMenuIds.has(node.id));
+  return NextResponse.json({ menu: filteredRoots });
 }
 
 export async function POST(req: NextRequest) {

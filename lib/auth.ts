@@ -1,13 +1,8 @@
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
 import { generateJti, parseDuration } from "@/lib/tokenUtil";
-
-export type JwtPayload = {
-  sub: string; // user id
-  email: string;
-  name?: string;
-  type?: string;
-};
+import { JwtPayload } from "@/types/auth";
+import { buildSessionContext } from "@/lib/session";
 
 const enc = new TextEncoder();
 const ACCESS_TOKEN_EXPIRES_IN = process.env.ACCESS_TOKEN_EXPIRES_IN || "4h";
@@ -61,7 +56,14 @@ export async function rotateRefreshToken(oldToken: string) {
   // revoke old
   await prisma.refreshToken.update({ where: { jti }, data: { revoked: true, revokedAt: new Date() } });
   // issue new
-  return await issueTokens({ sub: payload.sub, email: payload.email, name: payload.name, type: payload.type });
+  try {
+    const session = await buildSessionContext(payload.sub, {
+      schoolId: typeof payload.schoolId === "string" ? payload.schoolId : null,
+    });
+    return await issueTokens(session.jwtPayload);
+  } catch {
+    return null;
+  }
 }
 
 export async function revokeRefreshToken(token: string) {

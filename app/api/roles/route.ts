@@ -11,10 +11,19 @@ export async function GET(req: NextRequest) {
   const deny = await requirePermission(req, { action: "READ", resource: "API/ROLES" });
   if (deny) return deny;
   const { searchParams } = new URL(req.url);
+  const schoolId = searchParams.get("schoolId") || undefined;
   // support non-paginated list for selects
   const all = searchParams.get("all");
   if (all === "1") {
     const roles = await prisma.role.findMany({
+      where: schoolId
+        ? {
+            OR: [
+              { schoolId },
+              { schoolId: null },
+            ],
+          }
+        : undefined,
       orderBy: [{ name: "asc" }],
       include: { school: { select: { name: true } } },
     });
@@ -33,6 +42,14 @@ export async function GET(req: NextRequest) {
   const { page, perPage, q, sort, order } = parsePageQuery(req);
   const where = {
     ...(buildSearchWhere(["name", "key"], q) as any),
+    ...(schoolId
+      ? {
+          OR: [
+            { schoolId },
+            { schoolId: null },
+          ],
+        }
+      : {}),
   } as any;
   const total = await prisma.role.count({ where });
   const { skip, take } = pageToSkipTake(page, perPage);

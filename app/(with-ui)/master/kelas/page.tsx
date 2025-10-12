@@ -8,16 +8,24 @@ import ConfirmModal from "@/components/ConfirmModal";
 import { FiEdit, FiPlus, FiTrash, FiUsers } from "react-icons/fi";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { useApp } from "@/stores/useApp";
 
-type School = { id: string; name: string; code: string };
 type Department = { id: string; name: string };
 type ClassRow = { id: string; schoolId: string; departmentId?: string | null; departmentName?: string | null; name: string; grade: number; isActive: boolean };
 
 export default function ClassesPage() {
   const router = useRouter();
-  const [schools, setSchools] = useState<School[]>([]);
+  const app = useApp();
+  const isSuperAdmin = !!app.user?.isSuperAdmin;
+  const schools = useMemo(() => app.schools || [], [app.schools]);
+  const activeSchoolId = app.activeSchoolId || "";
+  const setActiveSchool = app.setActiveSchool;
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [schoolId, setSchoolId] = useState<string>("");
+  const schoolId = useMemo(() => {
+    if (activeSchoolId) return activeSchoolId;
+    if (isSuperAdmin && schools.length > 0) return schools[0].id;
+    return "";
+  }, [activeSchoolId, isSuperAdmin, schools]);
   const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState<ClassRow | null>(null);
   const [isOpen, setOpen] = useState(false);
@@ -25,9 +33,11 @@ export default function ClassesPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [target, setTarget] = useState<ClassRow | null>(null);
 
-  useEffect(() => {
-    axios.get<{ schools: School[] }>("/api/schools?all=1").then((r) => { setSchools(r.data.schools); setSchoolId(r.data.schools[0]?.id ?? ""); });
-  }, []);
+useEffect(() => {
+  if (isSuperAdmin && !activeSchoolId && schools.length > 0) {
+    setActiveSchool(schools[0].id).catch(() => {});
+  }
+}, [isSuperAdmin, activeSchoolId, schools, setActiveSchool]);
 
   useEffect(() => {
     if (!schoolId) return;
@@ -40,17 +50,51 @@ export default function ClassesPage() {
   const schoolItems = useMemo(() => schools.map((s) => ({ key: s.id, label: `${s.name} (${s.code})` })), [schools]);
   const deptItems = useMemo(() => departments.map((d) => ({ key: d.id, label: d.name })), [departments]);
 
-  const openCreate = () => { setForm({ id: "", schoolId, departmentId: null, departmentName: null, name: "", grade: 10, isActive: true } as any); setEditing(null); setOpen(true); };
-  const openEdit = (c: ClassRow) => { setForm({ ...c }); setEditing(c); setOpen(true); };
-  const askRemove = (c: ClassRow) => { setTarget(c); setConfirmOpen(true); };
-  const save = async () => {
-    if (!form) return;
-    try {
-      if (editing) {
-        await axios.put(`/api/classes/${editing.id}`, { departmentId: form.departmentId, name: form.name, grade: form.grade, isActive: form.isActive });
-        toast.success("Kelas diperbarui");
-      } else {
-        await axios.post(`/api/classes`, { schoolId, departmentId: form.departmentId || null, name: form.name, grade: form.grade, isActive: form.isActive });
+const openCreate = () => {
+  if (!schoolId) {
+    toast.error("Sekolah belum dipilih");
+    return;
+  }
+  setForm({ id: "", schoolId, departmentId: null, departmentName: null, name: "", grade: 10, isActive: true } as any);
+  setEditing(null);
+  setOpen(true);
+};
+const openEdit = (c: ClassRow) => { setForm({ ...c }); setEditing(c); setOpen(true); };
+const askRemove = (c: ClassRow) => { setTarget(c); setConfirmOpen(true); };
+useEffect(() => {
+  if (!isOpen || editing || !schoolId) return;
+  setForm((prev) => (prev ? { ...prev, schoolId } : prev));
+}, [isOpen, editing, schoolId]);
+useEffect(() => {
+  if (!schoolId) {
+    setOpen(false);
+    setConfirmOpen(false);
+    setForm(null);
+    setTarget(null);
+    return;
+  }
+  if (isOpen && editing && editing.schoolId !== schoolId) {
+    setOpen(false);
+    setEditing(null);
+    setForm(null);
+  }
+  if (confirmOpen && target && target.schoolId !== schoolId) {
+    setConfirmOpen(false);
+    setTarget(null);
+  }
+}, [schoolId, isOpen, confirmOpen, editing, target]);
+const save = async () => {
+  if (!form) return;
+  if (!schoolId) {
+    toast.error("Sekolah belum dipilih");
+    return;
+  }
+  try {
+    if (editing) {
+      await axios.put(`/api/classes/${editing.id}`, { departmentId: form.departmentId, name: form.name, grade: form.grade, isActive: form.isActive, schoolId });
+      toast.success("Kelas diperbarui");
+    } else {
+      await axios.post(`/api/classes`, { schoolId, departmentId: form.departmentId || null, name: form.name, grade: form.grade, isActive: form.isActive });
         toast.success("Kelas ditambahkan");
       }
       setOpen(false); setReloadKey((k) => k + 1);
@@ -67,15 +111,28 @@ export default function ClassesPage() {
           <p className="text-sm opacity-70">Kelas per sekolah.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Select selectedKeys={new Set([schoolId])} onSelectionChange={(keys) => { const k = Array.from(keys as Set<string>)[0]; setSchoolId(k ?? schoolId); }} items={schoolItems}>
-            {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
-          </Select>
+          {isSuperAdmin && (
+            <Select
+              selectedKeys={schoolId ? new Set([schoolId]) : new Set([])}
+              onSelectionChange={(keys) => {
+                const k = Array.from(keys as Set<string>)[0];
+                if (k) {
+                  setActiveSchool(String(k)).catch(() => {
+                    toast.error("Gagal mengganti sekolah aktif");
+                  });
+                }
+              }}
+              items={schoolItems}
+            >
+              {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
+            </Select>
+          )}
         </div>
       </div>
 
       {schoolId && (
         <DataTable<ClassRow>
-          externalReloadKey={reloadKey + schoolId}
+          externalReloadKey={`${reloadKey}-${schoolId}`}
           searchPlaceholder="Cari kelas..."
           columns={[
             { key: "name", header: "Nama" },
@@ -92,10 +149,13 @@ export default function ClassesPage() {
           ]}
           rowKey={(d) => d.id}
           fetchData={async ({ page, perPage, q }: FetchParams): Promise<Paged<ClassRow>> => {
+            if (!schoolId) {
+              return { data: [], page, perPage, total: 0, totalPages: 0 } as Paged<ClassRow>;
+            }
             const res = await axios.get(`/api/classes?page=${page}&perPage=${perPage}&q=${encodeURIComponent(q)}&schoolId=${schoolId}`);
             return res.data as Paged<ClassRow>;
           }}
-          toolbarRight={<Button color="primary" startContent={<FiPlus />} onPress={openCreate}>Tambah</Button>}
+          toolbarRight={<Button color="primary" startContent={<FiPlus />} onPress={openCreate} isDisabled={!schoolId}>Tambah</Button>}
         />
       )}
 
@@ -108,8 +168,12 @@ export default function ClassesPage() {
         confirmColor="danger"
         onConfirm={async () => {
           if (!target) return;
+          if (!schoolId) {
+            toast.error("Sekolah belum dipilih");
+            return;
+          }
           try {
-            await axios.delete(`/api/classes/${target.id}`);
+            await axios.delete(`/api/classes/${target.id}${schoolId ? `?schoolId=${schoolId}` : ""}`);
             setReloadKey((k) => k + 1);
             toast.success("Kelas dihapus");
           } catch (e: any) {
