@@ -63,7 +63,9 @@ type MenuState = {
   menu: MenuItem[];
   version: number;
   _es?: EventSource | null;
+  _unsub?: () => void;
   load: () => Promise<void>;
+  reset: () => void;
   connect: () => void;
 };
 
@@ -71,10 +73,13 @@ export const useMenu = create<MenuState>()((set, get) => ({
   menu: [],
   version: 0,
   _es: null,
+  _unsub: undefined,
+
   async load() {
     try {
       const res = await axios.get<{ menu: ApiMenuNode[] }>("/api/menu");
       const loggedIn = !!useAuth.getState().user;
+
       const mapNode = (node: ApiMenuNode): MenuItem => ({
         name: node.name,
         path: node.path,
@@ -82,32 +87,57 @@ export const useMenu = create<MenuState>()((set, get) => ({
         needLogin: node.needLogin,
         children: node.children?.map(mapNode) ?? [],
       });
+
       const filterByAuth = (items: MenuItem[], logged: boolean): MenuItem[] => {
-        const result: MenuItem[] = [];
-        for (const it of items) {
-          if (it.needLogin && !logged) continue;
-          const children = it.children ? filterByAuth(it.children, logged) : [];
-          result.push({ ...it, children });
-        }
-        return result;
+        return items
+          .filter((it) => !it.needLogin || logged)
+          .map((it) => ({
+            ...it,
+            children: it.children ? filterByAuth(it.children, logged) : [],
+          }));
       };
+
       const mapped = res.data.menu.map(mapNode);
       const filtered = filterByAuth(mapped, loggedIn);
-      set({ menu: filtered });
-    } catch {}
+      set({ menu: filtered, version: Date.now() });
+    } catch (err) {
+      console.error("Failed to load menu:", err);
+    }
   },
+
+  reset() {
+    set({ menu: [], version: Date.now() });
+  },
+
   connect() {
-    if (get()._es) return;
+    const { _es, _unsub } = get();
+
+    // avoid multiple connections
+    if (_es) return;
+
+    // SSE connection
     const es = new EventSource("/api/events/menu");
     es.onmessage = () => {
-      // bump version and reload menu
       set((s) => ({ version: s.version + 1 }));
       get().load();
     };
     es.onerror = () => {};
     set({ _es: es });
+
     // initial load
     get().load();
+
+    // cleanup old listener (if any)
+    if (_unsub) _unsub();
+
+    // subscribe ke perubahan user
+    const unsubscribe = useAuth.subscribe((state, prevState) => {
+      if (state.user?.id !== prevState.user?.id) {
+        get().reset();
+        get().load(); // refresh menu tiap user berubah
+      }
+    });
+
+    set({ _unsub: unsubscribe });
   },
 }));
-

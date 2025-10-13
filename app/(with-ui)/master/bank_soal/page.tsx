@@ -240,8 +240,10 @@ export default function BankSoalPage() {
                 <ModalHeader>{editing ? "Edit Mapel" : "Tambah Mapel"}</ModalHeader>
                 <ModalBody className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input label="Nama Mapel" labelPlacement="outside" value={subjectForm?.name ?? ""} onChange={(e) => setSubjectForm((f) => ({ ...(f as any), name: e.target.value }))} />
-                  <Input type="number" label="Grade" labelPlacement="outside" value={subjectForm?.grade != null ? String(subjectForm?.grade) : ""} onChange={(e) => setSubjectForm((f) => ({ ...(f as any), grade: e.target.value ? Number(e.target.value) : null }))} />
-                  <Select label="Jurusan (opsional)" labelPlacement="outside" selectedKeys={new Set(subjectForm?.departmentId ? [subjectForm.departmentId] : [])} onSelectionChange={(keys) => { const k = Array.from(keys as Set<string>)[0]; setSubjectForm((f) => ({ ...(f as any), departmentId: k === "none" ? null : (k ?? null) })); }} items={[{ key: "none", label: "(Tidak ada)" }, ...deptItems]}> {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>} </Select>
+                  <Input type="number" label="Grade" max={12} labelPlacement="outside" value={subjectForm?.grade != null ? String(subjectForm?.grade) : ""} onChange={(e) => setSubjectForm((f) => ({ ...(f as any), grade: e.target.value ? Number(e.target.value) : null }))} />
+                  <Select label="Jurusan (opsional)" labelPlacement="outside" selectedKeys={new Set(subjectForm?.departmentId ? [subjectForm.departmentId] : [])} onSelectionChange={(keys) => { const k = Array.from(keys as Set<string>)[0]; setSubjectForm((f) => ({ ...(f as any), departmentId: k === "none" ? null : (k ?? null) })); }} items={[{ key: "none", label: "(Tidak ada)" }, ...deptItems]}>
+                    {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
+                  </Select>
                   <Input isReadOnly label="Sekolah" labelPlacement="outside" value={schools.find((s) => s.id === (subjectForm?.schoolId || schoolId))?.name || "-"} />
                 </ModalBody>
                 <ModalFooter>
@@ -295,14 +297,18 @@ export default function BankSoalPage() {
               <>
                 <ModalHeader>Buat Soal {qSubject ? `- ${qSubject.name}` : ""}</ModalHeader>
                 <ModalBody className="grid grid-cols-1 gap-4">
-                  <Select label="Tipe Soal" selectedKeys={new Set([qType])} onSelectionChange={(keys) => { const k = Array.from(keys as Set<string>)[0] as any; setQType((k || "MCQ") as any); }} items={[{ key: "MCQ", label: "Pilihan Ganda" }, { key: "ESSAY", label: "Essay" }]}> {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>} </Select>
+                  <Select label="Tipe Soal" selectedKeys={new Set([qType])} onSelectionChange={(keys) => { const k = Array.from(keys as Set<string>)[0] as any; setQType((k || "MCQ") as any); }} items={[{ key: "MCQ", label: "Pilihan Ganda" }, { key: "ESSAY", label: "Essay" }]}>
+                    {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
+                  </Select>
                   <Textarea label="Teks Soal" labelPlacement="outside" value={qText} onChange={(e) => setQText(e.target.value)} minRows={3} />
                   {qType === "MCQ" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {qOpts.map((o, idx) => (
                         <Input key={o.key} label={`Opsi ${o.key}`} value={o.text} onChange={(e) => setQOpts((arr) => { const ns = [...arr]; ns[idx] = { ...ns[idx], text: e.target.value }; return ns; })} />
                       ))}
-                      <Select label="Jawaban Benar" selectedKeys={new Set([qCorrect])} onSelectionChange={(keys) => { const k = Array.from(keys as Set<string>)[0]; setQCorrect((k as string) || "A"); }} items={qOpts.map((o) => ({ key: o.key, label: o.key }))}> {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>} </Select>
+                      <Select label="Jawaban Benar" selectedKeys={new Set([qCorrect])} onSelectionChange={(keys) => { const k = Array.from(keys as Set<string>)[0]; setQCorrect((k as string) || "A"); }} items={qOpts.map((o) => ({ key: o.key, label: o.key }))}>
+                        {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
+                      </Select>
                     </div>
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

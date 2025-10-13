@@ -89,6 +89,7 @@ try {
     update: {},
     create: {
       name: "Administrator",
+      username: 'admin',
       email: adminEmail,
       passwordHash: hash,
       type: UserType.ADMIN,

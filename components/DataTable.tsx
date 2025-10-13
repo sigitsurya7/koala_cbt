@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Input, Select, SelectItem, Button, Card, CardBody, Skeleton } from "@heroui/react";
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Input, Select, SelectItem, Button, Card, CardBody, Skeleton, Image } from "@heroui/react";
 import { Pagination } from "@heroui/pagination";
 import { FiSearch } from "react-icons/fi";
 
@@ -142,7 +142,14 @@ export default function DataTable<T>({
                 )}
               </TableBody>
             ) : (
-              <TableBody items={items} emptyContent={"Tidak ada data"}>
+              <TableBody items={items} emptyContent={
+                (
+                  <div className="flex flex-col items-center justify-center py-10 text-sm text-gray-500">
+                    <Image src="/kwala.svg" alt="Tidak ada data" className="w-40 h-40 filter grayscale opacity-70" />
+                    <p className="text-black  dark:text-white">Bzzz... Belum ada data nih.</p>
+                  </div>
+                )
+              }>
                 {(item) => (
                   <TableRow key={rowKey(item)}>
                     {columns.map((c) => (

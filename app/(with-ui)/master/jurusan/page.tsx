@@ -94,7 +94,7 @@ export default function DepartmentsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">Master Departments</h1>
+          <h1 className="text-2xl font-semibold">Master Jurusan</h1>
           <p className="text-sm opacity-70">Jurusan per sekolah.</p>
         </div>
         <div className="flex items-center gap-2">

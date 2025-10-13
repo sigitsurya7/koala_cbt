@@ -274,7 +274,7 @@ export default function QuestionBuilderPage() {
                   <div className="space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {current.options.map((o, oi) => (
-                        <div key={o.key} className="flex items-end gap-2">
+                        <div key={o.key} className="flex items-end items-center gap-2">
                           <Input label={`Opsi ${o.key}`} value={o.text} onChange={(e) => setOption(oi, e.target.value)} className="flex-1" />
                           <Button variant="flat" startContent={<FiTrash />} color="danger" isDisabled={current.options.length <= 2} onPress={() => removeOption(oi)}>Hapus</Button>
                         </div>

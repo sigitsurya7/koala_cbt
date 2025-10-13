@@ -340,113 +340,108 @@ export default function UserManagementPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-content1 rounded-2xl p-4 w-full max-w-lg space-y-3">
             <h3 className="text-lg font-semibold">{form.id ? "Edit User" : "Tambah User"}</h3>
-            <Input
-              label="Nama"
-              labelPlacement="outside"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            />
-            <Input
-              label="Email"
-              type="email"
-              labelPlacement="outside"
-              value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            />
-            <Input
-              label="Username"
-              labelPlacement="outside"
-              value={form.username ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
-            />
-            <Input
-              label="Password"
-              type="password"
-              labelPlacement="outside"
-              value={form.password ?? ""}
-              placeholder={form.id ? "Kosongkan bila tidak diubah" : "••••••"}
-              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-            />
-            <Select
-              label="Tipe User"
-              labelPlacement="outside"
-              selectedKeys={new Set([form.type])}
-              onSelectionChange={(keys) => {
-                const key = Array.from(keys as Set<string>)[0];
-                setForm((f) => ({
-                  ...f,
-                  type: f.isSuperAdmin ? "ADMIN" : key ?? f.type,
-                }));
-              }}
-              isDisabled={form.isSuperAdmin}
-            >
-              {USER_TYPES.map((item) => (
-                <SelectItem key={item.key}>{item.label}</SelectItem>
-              ))}
-            </Select>
-
-            {!form.isSuperAdmin && (
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Nama"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
+              <Input
+                label="Email"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              />
+              <Input
+                label="Username"
+                value={form.username ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+              />
+              <Input
+                label="Password"
+                type="password"
+                value={form.password ?? ""}
+                placeholder={form.id ? "Kosongkan bila tidak diubah" : "••••••"}
+                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              />
               <Select
-                label="Sekolah"
-                labelPlacement="outside"
-                selectedKeys={form.schoolId ? new Set([form.schoolId]) : new Set([])}
+                label="Tipe User"
+                selectedKeys={new Set([form.type])}
                 onSelectionChange={(keys) => {
-                  const key = Array.from(keys as Set<string>)[0] ?? null;
-                  setForm((f) => ({ ...f, schoolId: key, roleId: null }));
+                  const key = Array.from(keys as Set<string>)[0];
+                  setForm((f) => ({
+                    ...f,
+                    type: f.isSuperAdmin ? "ADMIN" : key ?? f.type,
+                  }));
                 }}
+                isDisabled={form.isSuperAdmin}
               >
-                {app.schools.map((s) => (
-                  <SelectItem key={s.id}>
-                    {s.name} ({s.code})
-                  </SelectItem>
+                {USER_TYPES.map((item) => (
+                  <SelectItem key={item.key}>{item.label}</SelectItem>
                 ))}
               </Select>
-            )}
 
-            {!form.isSuperAdmin && form.type !== "SISWA" && (
-              <Select
-                label="Role"
-                labelPlacement="outside"
-                selectedKeys={form.roleId ? new Set([form.roleId]) : new Set([])}
-                onSelectionChange={(keys) => {
-                  const key = Array.from(keys as Set<string>)[0] ?? null;
-                  setForm((f) => ({ ...f, roleId: key }));
-                }}
-                isDisabled={roles.length === 0}
-                placeholder={roles.length === 0 ? "Role tidak tersedia" : undefined}
-              >
-                {roles.map((r) => (
-                  <SelectItem key={r.id}>{r.name}</SelectItem>
-                ))}
-              </Select>
-            )}
+              {!form.isSuperAdmin && (
+                <Select
+                  label="Sekolah"
+                  selectedKeys={form.schoolId ? new Set([form.schoolId]) : new Set([])}
+                  onSelectionChange={(keys) => {
+                    const key = Array.from(keys as Set<string>)[0] ?? null;
+                    setForm((f) => ({ ...f, schoolId: key, roleId: null }));
+                  }}
+                >
+                  {app.schools.map((s) => (
+                    <SelectItem key={s.id}>
+                      {s.name} ({s.code})
+                    </SelectItem>
+                  ))}
+                </Select>
+              )}
 
-            {currentUserIsSuperAdmin && (
+              {!form.isSuperAdmin && form.type !== "SISWA" && (
+                <Select
+                  label="Role"
+                  selectedKeys={form.roleId ? new Set([form.roleId]) : new Set([])}
+                  onSelectionChange={(keys) => {
+                    const key = Array.from(keys as Set<string>)[0] ?? null;
+                    setForm((f) => ({ ...f, roleId: key }));
+                  }}
+                  isDisabled={roles.length === 0}
+                  placeholder={roles.length === 0 ? "Role tidak tersedia" : undefined}
+                >
+                  {roles.map((r) => (
+                    <SelectItem key={r.id}>{r.name}</SelectItem>
+                  ))}
+                </Select>
+              )}
+
+              {currentUserIsSuperAdmin && (
+                <div className="flex items-center gap-3">
+                  <Switch
+                    isSelected={form.isSuperAdmin}
+                    onValueChange={(v) =>
+                      setForm((f) => ({
+                        ...f,
+                        isSuperAdmin: v,
+                        type: v ? "ADMIN" : f.type === "ADMIN" ? "SISWA" : f.type,
+                        schoolId: v ? null : f.schoolId ?? defaultSchoolId,
+                        roleId: null,
+                      }))
+                    }
+                  >
+                    SuperAdmin
+                  </Switch>
+                </div>
+              )}
+
               <div className="flex items-center gap-3">
                 <Switch
-                  isSelected={form.isSuperAdmin}
-                  onValueChange={(v) =>
-                    setForm((f) => ({
-                      ...f,
-                      isSuperAdmin: v,
-                      type: v ? "ADMIN" : f.type === "ADMIN" ? "SISWA" : f.type,
-                      schoolId: v ? null : f.schoolId ?? defaultSchoolId,
-                      roleId: null,
-                    }))
-                  }
+                  isSelected={form.isActive}
+                  onValueChange={(v) => setForm((f) => ({ ...f, isActive: v }))}
                 >
-                  SuperAdmin
+                  Aktif
                 </Switch>
               </div>
-            )}
-
-            <div className="flex items-center gap-3">
-              <Switch
-                isSelected={form.isActive}
-                onValueChange={(v) => setForm((f) => ({ ...f, isActive: v }))}
-              >
-                Aktif
-              </Switch>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">

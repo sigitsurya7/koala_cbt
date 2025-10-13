@@ -30,6 +30,8 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
   const app = useApp();
   const menuStore = useMenu();
 
+  const dataUser = useAuth()
+
   const handleAction = async (key: any) => {
     try {
       if (key === "logout") {
@@ -69,7 +71,7 @@ export default function NavbarKoala({ onToggleSidebar }: NavbarKoalaProps) {
       <NavbarContent justify="end">
         <NavbarItem className="hidden md:block">
           {/* School picker (if multiple) */}
-          {app.schools && app.schools.length > 0 && (
+          {app.schools && app.schools.length > 0 && dataUser.user?.isSuperAdmin != true && (
             <Dropdown>
               <DropdownTrigger>
                 <Button variant="light" aria-label="Pilih sekolah" className="focus-visible:ring-2">

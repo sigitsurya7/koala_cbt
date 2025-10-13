@@ -524,3 +524,22 @@ model StaffDetail {
   createdAt  DateTime @default(now())
   @@unique([userId, schoolId])
 }
+
+model TeacherSubject {
+  id          String   @id @default(cuid())
+  teacherId   String
+  teacher     TeacherDetail @relation(fields: [teacherId], references: [id])
+  subjectId   String
+  subject     Subject @relation(fields: [subjectId], references: [id])
+  classId     String?     // optional: kalau ngajar di kelas tertentu aja
+  class       Class?      @relation(fields: [classId], references: [id])
+  isMain      Boolean @default(true)  // true = guru utama mapel itu
+}
+
+model QuestionCollaborator {
+  id          String   @id @default(cuid())
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id])
+  userId      String
+  user        User @relation(fields: [userId], references: [id])
+}
