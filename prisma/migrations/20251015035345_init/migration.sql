@@ -72,10 +72,12 @@ CREATE TABLE "Period" (
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "username" TEXT,
     "email" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
     "type" "UserType" NOT NULL DEFAULT 'SISWA',
     "isSuperAdmin" BOOLEAN NOT NULL DEFAULT false,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
@@ -145,6 +147,7 @@ CREATE TABLE "Menu" (
     "parentId" TEXT,
     "visibility" "Visibility" NOT NULL DEFAULT 'PUBLIC',
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "menuSuperAdmin" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "Menu_pkey" PRIMARY KEY ("id")
 );
@@ -156,6 +159,19 @@ CREATE TABLE "RoleMenu" (
     "menuId" TEXT NOT NULL,
 
     CONSTRAINT "RoleMenu_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RefreshToken" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "jti" TEXT NOT NULL,
+    "revoked" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "revokedAt" TIMESTAMP(3),
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "RefreshToken_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -331,6 +347,96 @@ CREATE TABLE "AuditLog" (
     CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "UserDetail" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "fullName" TEXT NOT NULL,
+    "gender" TEXT,
+    "birthPlace" TEXT,
+    "birthDate" TIMESTAMP(3),
+    "phone" TEXT,
+    "address" TEXT,
+    "religion" TEXT,
+    "avatarUrl" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "UserDetail_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "StudentDetail" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "nis" TEXT,
+    "nisn" TEXT,
+    "schoolId" TEXT NOT NULL,
+    "classId" TEXT,
+    "departmentId" TEXT,
+    "entryYear" INTEGER,
+    "status" TEXT,
+    "guardianName" TEXT,
+    "guardianPhone" TEXT,
+    "guardianJob" TEXT,
+    "address" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "StudentDetail_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "TeacherDetail" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "schoolId" TEXT NOT NULL,
+    "nip" TEXT,
+    "nuptk" TEXT,
+    "subjectId" TEXT,
+    "position" TEXT,
+    "education" TEXT,
+    "phone" TEXT,
+    "address" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "TeacherDetail_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "StaffDetail" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "schoolId" TEXT NOT NULL,
+    "nip" TEXT,
+    "position" TEXT,
+    "phone" TEXT,
+    "address" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "StaffDetail_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "TeacherSubject" (
+    "id" TEXT NOT NULL,
+    "teacherId" TEXT NOT NULL,
+    "subjectId" TEXT NOT NULL,
+    "classId" TEXT,
+    "isMain" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "TeacherSubject_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "QuestionCollaborator" (
+    "id" TEXT NOT NULL,
+    "questionId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+
+    CONSTRAINT "QuestionCollaborator_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "School_code_key" ON "School"("code");
 
@@ -338,7 +444,16 @@ CREATE UNIQUE INDEX "School_code_key" ON "School"("code");
 CREATE UNIQUE INDEX "SchoolSetting_schoolId_key_key" ON "SchoolSetting"("schoolId", "key");
 
 -- CreateIndex
+CREATE INDEX "Period_schoolId_academicYearId_idx" ON "Period"("schoolId", "academicYearId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE INDEX "UserSchool_userId_schoolId_idx" ON "UserSchool"("userId", "schoolId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Role_key_schoolId_key" ON "Role"("key", "schoolId");
@@ -350,16 +465,58 @@ CREATE UNIQUE INDEX "Permission_action_resource_key" ON "Permission"("action", "
 CREATE UNIQUE INDEX "RolePermission_roleId_permissionId_key" ON "RolePermission"("roleId", "permissionId");
 
 -- CreateIndex
+CREATE INDEX "UserRole_userId_schoolId_idx" ON "UserRole"("userId", "schoolId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Menu_key_key" ON "Menu"("key");
 
 -- CreateIndex
+CREATE INDEX "Menu_parentId_order_idx" ON "Menu"("parentId", "order");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "RoleMenu_roleId_menuId_key" ON "RoleMenu"("roleId", "menuId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RefreshToken_jti_key" ON "RefreshToken"("jti");
+
+-- CreateIndex
+CREATE INDEX "RefreshToken_userId_idx" ON "RefreshToken"("userId");
+
+-- CreateIndex
+CREATE INDEX "Department_schoolId_name_idx" ON "Department"("schoolId", "name");
+
+-- CreateIndex
+CREATE INDEX "Class_schoolId_departmentId_idx" ON "Class"("schoolId", "departmentId");
+
+-- CreateIndex
+CREATE INDEX "Room_schoolId_name_idx" ON "Room"("schoolId", "name");
+
+-- CreateIndex
+CREATE INDEX "Question_schoolId_subjectId_idx" ON "Question"("schoolId", "subjectId");
+
+-- CreateIndex
+CREATE INDEX "Exam_schoolId_periodId_idx" ON "Exam"("schoolId", "periodId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ExamToken_token_key" ON "ExamToken"("token");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ExamToken_examRoomId_key" ON "ExamToken"("examRoomId");
+
+-- CreateIndex
+CREATE INDEX "Attempt_schoolId_examId_studentId_status_idx" ON "Attempt"("schoolId", "examId", "studentId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserDetail_userId_key" ON "UserDetail"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "StudentDetail_userId_key" ON "StudentDetail"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TeacherDetail_userId_schoolId_key" ON "TeacherDetail"("userId", "schoolId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "StaffDetail_userId_schoolId_key" ON "StaffDetail"("userId", "schoolId");
 
 -- AddForeignKey
 ALTER TABLE "SchoolSetting" ADD CONSTRAINT "SchoolSetting_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -411,6 +568,9 @@ ALTER TABLE "RoleMenu" ADD CONSTRAINT "RoleMenu_roleId_fkey" FOREIGN KEY ("roleI
 
 -- AddForeignKey
 ALTER TABLE "RoleMenu" ADD CONSTRAINT "RoleMenu_menuId_fkey" FOREIGN KEY ("menuId") REFERENCES "Menu"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RefreshToken" ADD CONSTRAINT "RefreshToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Department" ADD CONSTRAINT "Department_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -492,3 +652,48 @@ ALTER TABLE "Answer" ADD CONSTRAINT "Answer_attemptId_fkey" FOREIGN KEY ("attemp
 
 -- AddForeignKey
 ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserDetail" ADD CONSTRAINT "UserDetail_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StudentDetail" ADD CONSTRAINT "StudentDetail_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StudentDetail" ADD CONSTRAINT "StudentDetail_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StudentDetail" ADD CONSTRAINT "StudentDetail_classId_fkey" FOREIGN KEY ("classId") REFERENCES "Class"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StudentDetail" ADD CONSTRAINT "StudentDetail_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TeacherDetail" ADD CONSTRAINT "TeacherDetail_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TeacherDetail" ADD CONSTRAINT "TeacherDetail_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TeacherDetail" ADD CONSTRAINT "TeacherDetail_subjectId_fkey" FOREIGN KEY ("subjectId") REFERENCES "Subject"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StaffDetail" ADD CONSTRAINT "StaffDetail_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StaffDetail" ADD CONSTRAINT "StaffDetail_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TeacherSubject" ADD CONSTRAINT "TeacherSubject_teacherId_fkey" FOREIGN KEY ("teacherId") REFERENCES "TeacherDetail"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TeacherSubject" ADD CONSTRAINT "TeacherSubject_subjectId_fkey" FOREIGN KEY ("subjectId") REFERENCES "Subject"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TeacherSubject" ADD CONSTRAINT "TeacherSubject_classId_fkey" FOREIGN KEY ("classId") REFERENCES "Class"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "QuestionCollaborator" ADD CONSTRAINT "QuestionCollaborator_questionId_fkey" FOREIGN KEY ("questionId") REFERENCES "Question"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "QuestionCollaborator" ADD CONSTRAINT "QuestionCollaborator_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

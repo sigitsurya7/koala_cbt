@@ -3,15 +3,17 @@ export const runtime = "nodejs";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/acl";
+import { resolveSchoolContext } from "@/lib/tenant";
 
 export async function GET(req: NextRequest) {
   const deny = await requirePermission(req, { action: "READ", resource: "API/USERS" });
   if (deny) return deny;
 
   const { searchParams } = new URL(req.url);
-  const schoolId = searchParams.get("schoolId") || undefined;
-  if (!schoolId) return NextResponse.json({ message: "schoolId wajib" }, { status: 400 });
-  const school = await prisma.school.findUnique({ where: { id: schoolId }, select: { code: true, name: true } });
+  const override = searchParams.get("schoolId") || undefined;
+  const ctx = await resolveSchoolContext(req, { overrideSchoolId: override ?? null });
+  if (ctx instanceof NextResponse) return ctx;
+  const school = await prisma.school.findUnique({ where: { id: ctx.schoolId }, select: { code: true, name: true } });
   if (!school) return NextResponse.json({ message: "Sekolah tidak ditemukan" }, { status: 404 });
 
   // types.ts (optional kalau mau pisah)

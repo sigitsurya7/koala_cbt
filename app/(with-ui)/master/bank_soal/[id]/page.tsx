@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { Button, Card, CardBody, Chip, Input, Select, SelectItem, Textarea, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/react";
 import toast from "react-hot-toast";
@@ -20,8 +20,8 @@ const MAX_OPTIONS = 5;
 export default function QuestionBuilderPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const search = useSearchParams();
   const subjectId = String(params?.id || "");
-  const draftKey = `bankSoalDraft:${subjectId}`;
 
   const app = useApp();
   const isSuperAdmin = !!app.user?.isSuperAdmin;
@@ -48,18 +48,75 @@ export default function QuestionBuilderPage() {
   const [hasDraft, setHasDraft] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
-  // Load subject and existing questions (then optionally offer draft)
+  // Academic context filters
+  const [years, setYears] = useState<Array<{ id: string; label: string; isActive?: boolean }>>([]);
+  const [periods, setPeriods] = useState<Array<{ id: string; type: string; isActive?: boolean; academicYearId: string }>>([]);
+  const [fYear, setFYear] = useState<string | null>(null);
+  const [fPeriod, setFPeriod] = useState<string | null>(null);
+
+  // Draft key depends on subject + context
+  const draftKey = useMemo(() => `bankSoalDraft:${subjectId}:${fYear || '-'}/${fPeriod || '-'}`, [subjectId, fYear, fPeriod]);
+
+  // Load subject (independent from context)
   useEffect(() => {
     if (!subjectId || !schoolId) return;
     let mounted = true;
-    const load = async () => {
+    (async () => {
       try {
         const r = await axios.get(`/api/subjects/${subjectId}${schoolId ? `?schoolId=${schoolId}` : ""}`);
         if (mounted) setSubject(r.data);
       } catch {}
-      // Always try to load from server first
+    })();
+    return () => { mounted = false; };
+  }, [subjectId, schoolId]);
+
+  // Load academic years and initialize filters from query or active
+  useEffect(() => {
+    if (!schoolId) return;
+    (async () => {
       try {
-        const qres = await axios.get(`/api/questions?subjectId=${subjectId}&page=1&perPage=200${schoolId ? `&schoolId=${schoolId}` : ""}`);
+        const r = await axios.get<{ data: Array<{ id: string; label: string; isActive?: boolean }> }>("/api/academic-years", { params: { perPage: 200 } });
+        const ys = r.data.data || [];
+        setYears(ys);
+        const qYear = search?.get('academicYearId');
+        const def = qYear ? ys.find((y) => y.id === qYear) : (ys.find((y) => (y as any).isActive) || ys[0] || null);
+        setFYear(def ? def.id : null);
+      } catch {
+        setYears([]);
+        setFYear(null);
+      }
+    })();
+  }, [schoolId]);
+
+  // Load periods when fYear changes
+  useEffect(() => {
+    if (!fYear) { setPeriods([]); setFPeriod(null); return; }
+    (async () => {
+      try {
+        const r = await axios.get<{ data: Array<{ id: string; type: string; isActive?: boolean; academicYearId: string }> }>("/api/periods", { params: { academicYearId: fYear, perPage: 200 } });
+        const ps = r.data.data || [];
+        setPeriods(ps);
+        const qPeriod = search?.get('periodId');
+        const def = qPeriod ? ps.find((p) => p.id === qPeriod) : (ps.find((p) => (p as any).isActive) || ps[0] || null);
+        setFPeriod(def ? def.id : null);
+      } catch {
+        setPeriods([]);
+        setFPeriod(null);
+      }
+    })();
+  }, [fYear]);
+
+  // Load existing questions for selected context, then check for draft
+  useEffect(() => {
+    if (!subjectId || !schoolId) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const params: Record<string, any> = { subjectId, page: 1, perPage: 200 };
+        if (schoolId) params.schoolId = schoolId;
+        if (fYear) params.academicYearId = fYear;
+        if (fPeriod) params.periodId = fPeriod;
+        const qres = await axios.get(`/api/questions`, { params });
         const arr = (qres.data.data || []) as Array<{ id: string; type: "MCQ"|"ESSAY"; text: string; options?: MCQOption[]; correctKey?: string; points?: number; difficulty?: number }>;
         if (arr.length > 0) {
           const mapped: DraftItem[] = arr.map((q) => q.type === "MCQ"
@@ -72,18 +129,13 @@ export default function QuestionBuilderPage() {
       } catch {
         if (mounted) { setItems([{ type: "MCQ", text: "", options: [ { key: "A", text: "" }, { key: "B", text: "" }, { key: "C", text: "" }, { key: "D", text: "" } ], correctKey: "A", points: 1, difficulty: 1 }]); setIndex(0); }
       }
-      // After server load, offer draft if exists
       try {
         const raw = localStorage.getItem(draftKey);
-        if (raw) {
-          setHasDraft(true);
-          setShowUnsavedModal(true);
-        }
+        if (raw) { setHasDraft(true); setShowUnsavedModal(true); }
       } catch {}
-    };
-    load();
+    })();
     return () => { mounted = false; };
-  }, [subjectId, schoolId]);
+  }, [subjectId, schoolId, fYear, fPeriod, draftKey]);
 
   // beforeunload guard
   useEffect(() => {
@@ -211,8 +263,8 @@ export default function QuestionBuilderPage() {
       if (!subjectId || items.length === 0) { toast.error("Tidak ada soal untuk disimpan"); return; }
       if (!schoolId) { toast.error("Sekolah belum dipilih"); return; }
       const payload = { subjectId, schoolId, items: items.map((it) => (it.type === "MCQ"
-        ? { id: (it as any).id, type: it.type, text: it.text, options: it.options, correctKey: it.correctKey, points: it.points, difficulty: it.difficulty }
-        : { id: (it as any).id, type: it.type, text: it.text, points: it.points, difficulty: it.difficulty })) };
+        ? { id: (it as any).id, type: it.type, text: it.text, options: it.options, correctKey: it.correctKey, points: it.points, difficulty: it.difficulty, academicYearId: fYear, periodId: fPeriod }
+        : { id: (it as any).id, type: it.type, text: it.text, points: it.points, difficulty: it.difficulty, academicYearId: fYear, periodId: fPeriod })) };
       const res = await axios.post("/api/questions/sync", payload);
       if (res.data?.ok) {
         clearDraft();
@@ -274,7 +326,7 @@ export default function QuestionBuilderPage() {
                   <div className="space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {current.options.map((o, oi) => (
-                        <div key={o.key} className="flex items-end items-center gap-2">
+                        <div key={o.key} className="flex items-end gap-2">
                           <Input label={`Opsi ${o.key}`} value={o.text} onChange={(e) => setOption(oi, e.target.value)} className="flex-1" />
                           <Button variant="flat" startContent={<FiTrash />} color="danger" isDisabled={current.options.length <= 2} onPress={() => removeOption(oi)}>Hapus</Button>
                         </div>
@@ -339,6 +391,21 @@ export default function QuestionBuilderPage() {
 
       {/* Right panel */}
       <div className="lg:col-span-1 space-y-4 sm:order-1">
+        <Card>
+          <CardBody className="space-y-3">
+            <div className="font-semibold">Konteks Akademik</div>
+            <Select label="Tahun Ajaran" selectedKeys={new Set(fYear ? [fYear] : [])} onSelectionChange={(keys) => {
+              const k = Array.from(keys as Set<string>)[0] || null; setFYear(k);
+            }} items={years.map((y) => ({ key: y.id, label: y.label + ((y as any).isActive ? " (Aktif)" : "") }))}>
+              {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
+            </Select>
+            <Select label="Periode" selectedKeys={new Set(fPeriod ? [fPeriod] : [])} onSelectionChange={(keys) => {
+              const k = Array.from(keys as Set<string>)[0] || null; setFPeriod(k);
+            }} items={periods.map((p) => ({ key: p.id, label: p.type + ((p as any).isActive ? " (Aktif)" : "") }))}>
+              {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
+            </Select>
+          </CardBody>
+        </Card>
         <Card>
           <CardBody className="space-y-3">
             <div className="flex items-center justify-between">

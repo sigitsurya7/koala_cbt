@@ -32,3 +32,47 @@ export async function enforceActiveSchool(req: NextRequest): Promise<{ schoolId:
   return { schoolId };
 }
 
+// Central resolver for school context across APIs
+// - SuperAdmin: may use overrideSchoolId, or ?schoolId, or cookie; if still missing and require=true -> 400
+// - Non SuperAdmin: must use JWT payload.schoolId (fallback to cookie), membership enforced
+export async function resolveSchoolContext(
+  req: NextRequest,
+  opts: { overrideSchoolId?: string | null; require?: boolean; allowSuperQuery?: boolean } = {},
+): Promise<{ userId: string; isSuperAdmin: boolean; schoolId: string } | NextResponse> {
+  const token = req.cookies.get(ACCESS_COOKIE)?.value || null;
+  const payload = token ? await verifyAccessToken(token) : null;
+  if (!payload || !payload.sub) {
+    return NextResponse.json({ message: "Unauthenticated" }, { status: 401 });
+  }
+
+  const isSuper = !!payload.isSuperAdmin;
+  const requireSchool = opts.require !== false; // default true
+  const allowSuperQuery = opts.allowSuperQuery !== false; // default true
+
+  const qp = new URL(req.url).searchParams;
+  const qpSchoolId = qp.get("schoolId");
+  const cookieSchoolId = getActiveSchoolId(req);
+
+  let schoolId: string | null = null;
+
+  if (isSuper) {
+    schoolId = (opts.overrideSchoolId ?? (allowSuperQuery ? qpSchoolId : null) ?? cookieSchoolId) || null;
+    // SuperAdmin bypass membership; just ensure present if required
+    if (!schoolId && requireSchool) {
+      return NextResponse.json({ message: "Active school is required" }, { status: 400 });
+    }
+  } else {
+    // Prefer JWT payload schoolId (if present), then cookie as fallback
+    schoolId = (typeof payload.schoolId === "string" ? payload.schoolId : null) || cookieSchoolId;
+    if (!schoolId && requireSchool) {
+      return NextResponse.json({ message: "Active school is required" }, { status: 400 });
+    }
+    if (schoolId) {
+      const deny = await assertMembership(req, schoolId);
+      if (deny) return deny;
+    }
+  }
+
+  return { userId: payload.sub, isSuperAdmin: isSuper, schoolId: schoolId as string };
+}
+

@@ -15,8 +15,8 @@ type Props = {
 };
 
 const TYPES = [
-  { key: "SEMESTER_1", label: "SEMESTER_1" },
-  { key: "SEMESTER_2", label: "SEMESTER_2" },
+  { key: "SEMESTER_1", label: "SEMESTER 1" },
+  { key: "SEMESTER_2", label: "SEMESTER 2" },
   { key: "UTS", label: "UTS" },
   { key: "UAS", label: "UAS" },
 ];

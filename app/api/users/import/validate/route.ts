@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/acl";
+import { resolveSchoolContext } from "@/lib/tenant";
 
 type Row = {
   fullName: string;
@@ -58,7 +59,11 @@ function mapRow(obj: any): Row {
     address: get("address", "alamat") ?? undefined,
     status: get("status", "status siswa") ?? undefined,
   } as any;
-  if (r.birthDate instanceof Date) r.birthDate = r.birthDate.toISOString().slice(0, 10) as any;
+  // normalize when coming from date-like object
+  const bd: any = (r as any).birthDate;
+  if (bd && typeof bd === "object" && typeof bd.toISOString === "function") {
+    r.birthDate = bd.toISOString().slice(0, 10) as any;
+  }
   if (typeof r.entryYear === "string") {
     const parsed = parseInt(r.entryYear as any, 10);
     r.entryYear = isNaN(parsed) ? undefined : parsed;
@@ -75,6 +80,11 @@ export async function POST(req: NextRequest) {
   const rows: Row[] = rawRows.map(mapRow);
   if (!schoolId || rows.length === 0) return NextResponse.json({ message: "schoolId dan rows wajib" }, { status: 400 });
 
+  // Enforce school context and membership
+  const ctxOrRes = await resolveSchoolContext(req, { overrideSchoolId: schoolId });
+  if ((ctxOrRes as any)?.headers) return ctxOrRes as any;
+  const ctx = ctxOrRes as { userId: string; isSuperAdmin: boolean; schoolId: string };
+
   const school = await prisma.school.findUnique({ where: { id: schoolId }, select: { id: true, code: true } });
   if (!school) return NextResponse.json({ message: "Sekolah tidak ditemukan" }, { status: 404 });
 
@@ -89,9 +99,9 @@ export async function POST(req: NextRequest) {
 
   const classMap = new Map<string, string>();
   const deptMap = new Map<string, string>();
-  const classes = await prisma.class.findMany({ where: { schoolId }, select: { id: true, name: true } });
+  const classes = await prisma.class.findMany({ where: { schoolId: ctx.schoolId }, select: { id: true, name: true } });
   classes.forEach((c) => classMap.set(c.name.toLowerCase(), c.id));
-  const depts = await prisma.department.findMany({ where: { schoolId }, select: { id: true, name: true } });
+  const depts = await prisma.department.findMany({ where: { schoolId: ctx.schoolId }, select: { id: true, name: true } });
   depts.forEach((d) => deptMap.set(d.name.toLowerCase(), d.id));
 
   const errors: Array<{ row: number; message: string }> = [];
@@ -127,7 +137,7 @@ export async function POST(req: NextRequest) {
       email,
       username,
       passwordPlain,
-      schoolId,
+      schoolId: ctx.schoolId,
       classId: classId || null,
       className: r.className || null,
       departmentId: departmentId || null,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/acl";
-import { enforceActiveSchool } from "@/lib/tenant";
+import { resolveSchoolContext } from "@/lib/tenant";
 import { ACCESS_COOKIE, verifyAccessToken } from "@/lib/auth";
 
 type Item = {
@@ -18,23 +18,24 @@ type Item = {
 export async function POST(req: NextRequest) {
   const deny = await requirePermission(req, { action: "CREATE", resource: "API/QUESTIONS" });
   if (deny) return deny;
-  const ensured = await enforceActiveSchool(req);
-  if (ensured instanceof NextResponse) return ensured;
+  const ctx = await resolveSchoolContext(req);
+  if (ctx instanceof NextResponse) return ctx;
   const body = await req.json();
   const items: Item[] = Array.isArray(body?.items) ? body.items : [];
   if (items.length === 0) return NextResponse.json({ message: "items kosong" }, { status: 400 });
   const token = req.cookies.get(ACCESS_COOKIE)?.value;
   const payload = token ? await verifyAccessToken(token) : null;
+  if (!payload?.sub) return NextResponse.json({ message: "Unauthenticated" }, { status: 401 });
 
+  let failureIndex = -1;
   try {
-    let failureIndex = -1;
     const count = await prisma.$transaction(async (tx) => {
       let inserted = 0;
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
         failureIndex = i;
         const subj = await tx.subject.findUnique({ where: { id: it.subjectId } });
-        if (!subj || subj.schoolId !== ensured.schoolId) throw new Error("Subject tidak valid untuk sekolah aktif");
+        if (!subj || subj.schoolId !== ctx.schoolId) throw new Error("Subject tidak valid untuk sekolah aktif");
         await tx.question.create({
           data: {
             schoolId: subj.schoolId,
@@ -45,7 +46,9 @@ export async function POST(req: NextRequest) {
             correctKey: it.correctKey,
             points: it.points ?? 1,
             difficulty: it.difficulty ?? 1,
-            createdById: payload?.sub || undefined,
+            createdById: payload.sub,
+            academicYearId: (it as any).academicYearId ?? null,
+            periodId: (it as any).periodId ?? null,
           },
         });
         inserted++;

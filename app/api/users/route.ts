@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { buildOrderBy, buildSearchWhere, pageToSkipTake, parsePageQuery } from "@/lib/pagination";
 import { requirePermission } from "@/lib/acl";
-import { enforceActiveSchool, getUserFromRequest } from "@/lib/tenant";
+import { resolveSchoolContext, getUserFromRequest } from "@/lib/tenant";
 import { assertCsrf } from "@/lib/csrf";
 import { z } from "zod";
 import { handleApiError, zparse } from "@/lib/validate";
@@ -17,9 +17,9 @@ export async function GET(req: NextRequest) {
   const filterSchoolId = searchParams.get("schoolId") || undefined;
   let ensuredSchoolId: string | null = null;
   if (!user?.isSuperAdmin) {
-    const ensured = await enforceActiveSchool(req);
-    if (ensured instanceof NextResponse) return ensured;
-    ensuredSchoolId = ensured.schoolId;
+    const ctx = await resolveSchoolContext(req);
+    if (ctx instanceof NextResponse) return ctx;
+    ensuredSchoolId = ctx.schoolId;
   } else {
     ensuredSchoolId = filterSchoolId || null; // superadmin boleh tanpa filter
   }

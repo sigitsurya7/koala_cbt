@@ -1,17 +1,28 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 import { getJob, removeJob } from "@/lib/importJobs";
 import { prisma } from "@/lib/prisma";
+import { resolveSchoolContext } from "@/lib/tenant";
+import { requirePermission } from "@/lib/acl";
 import bcrypt from "bcryptjs";
 
 export async function GET(req: NextRequest) {
+  const deny = await requirePermission(req, { action: "CREATE", resource: "API/USERS" });
+  if (deny) return deny as any;
   const { searchParams } = new URL(req.url);
   const jobId = searchParams.get("jobId");
   if (!jobId) return new Response("", { status: 400 });
   const job = getJob(jobId);
   if (!job) return new Response("", { status: 404 });
 
+  // Enforce school membership: ensure all items are for a single school and caller has access
+  const schoolIds = Array.from(new Set(job.items.map((i: any) => i.schoolId).filter(Boolean)));
+  if (schoolIds.length !== 1) return new Response("", { status: 400 });
+  const ctx = await resolveSchoolContext(req, { overrideSchoolId: schoolIds[0] });
+  if (ctx instanceof NextResponse) return ctx as any;
+
   let onProgress: ((payload: any) => void) | null = null;
+  let failureIndex = -1;
   const stream = new ReadableStream({
     start(controller) {
       const enc = (data: any) => `data: ${JSON.stringify(data)}\n\n`;
@@ -39,7 +50,7 @@ export async function GET(req: NextRequest) {
           job.status = "committing";
           job.processed = 0;
           job.emitter.emit("progress", { status: job.status, total: job.total, processed: 0 });
-          let failureIndex = -1;
+          failureIndex = -1;
           await prisma.$transaction(async (tx) => {
             for (let i = 0; i < job.items.length; i++) {
               const it = job.items[i];

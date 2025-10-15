@@ -103,6 +103,8 @@ export default defineConfig([globalIgnores([
             ignoreRestSiblings: false,
             argsIgnorePattern: "^_.*?$",
         }],
+        "@typescript-eslint/no-floating-promises": "warn",
+        "@typescript-eslint/consistent-type-imports": ["warn", { prefer: "type-imports" }],
 
         "import/order": ["warn", {
             groups: [

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/acl";
-import { enforceActiveSchool } from "@/lib/tenant";
+import { resolveSchoolContext } from "@/lib/tenant";
 
 type Row = {
   // Inggris
@@ -19,13 +19,24 @@ export async function POST(req: NextRequest) {
   if (deny) return deny;
   const body = await req.json();
   const subjectId: string = body?.subjectId;
+  const academicYearId: string | undefined = body?.academicYearId || undefined;
+  const periodId: string | undefined = body?.periodId || undefined;
   const rawRows: any[] = Array.isArray(body?.rows) ? body.rows : [];
   const rows: Row[] = rawRows as Row[];
   if (!subjectId || rows.length === 0) return NextResponse.json({ message: "subjectId dan rows wajib" }, { status: 400 });
-  const ensured = await enforceActiveSchool(req);
-  if (ensured instanceof NextResponse) return ensured;
+  const ctx = await resolveSchoolContext(req);
+  if (ctx instanceof NextResponse) return ctx;
   const subject = await prisma.subject.findUnique({ where: { id: subjectId }, select: { schoolId: true } });
-  if (!subject || subject.schoolId !== ensured.schoolId) return NextResponse.json({ message: "Subject tidak valid untuk sekolah aktif" }, { status: 400 });
+  if (!subject || subject.schoolId !== ctx.schoolId) return NextResponse.json({ message: "Subject tidak valid untuk sekolah aktif" }, { status: 400 });
+  if (academicYearId) {
+    const ay = await prisma.academicYear.findUnique({ where: { id: academicYearId }, select: { schoolId: true } });
+    if (!ay || ay.schoolId !== ctx.schoolId) return NextResponse.json({ message: "Tahun ajaran tidak valid" }, { status: 400 });
+  }
+  if (periodId) {
+    const p = await prisma.period.findUnique({ where: { id: periodId }, select: { schoolId: true, academicYearId: true } });
+    if (!p || p.schoolId !== ctx.schoolId) return NextResponse.json({ message: "Periode tidak valid" }, { status: 400 });
+    if (academicYearId && p.academicYearId !== academicYearId) return NextResponse.json({ message: "Periode tidak sesuai tahun ajaran" }, { status: 400 });
+  }
 
   const errors: Array<{ row: number; message: string }> = [];
   const prepared: any[] = [];
@@ -44,12 +55,12 @@ export async function POST(req: NextRequest) {
       if (opts.length < 2) { errors.push({ row: idx + 2, message: "MCQ butuh minimal 2 opsi" }); return; }
       const ck = (norm(r.kunci) || norm(r.correctKey) || "A").toUpperCase();
       if (!opts.find((o) => o.key === ck)) { errors.push({ row: idx + 2, message: `correctKey '${ck}' tidak ada pada opsi` }); return; }
-      prepared.push({ subjectId, type, text, options: opts, correctKey: ck, points, difficulty });
+      prepared.push({ subjectId, type, text, options: opts, correctKey: ck, points, difficulty, academicYearId, periodId });
       return;
     }
 
     // ESSAY
-    prepared.push({ subjectId, type, text, points, difficulty });
+    prepared.push({ subjectId, type, text, points, difficulty, academicYearId, periodId });
   });
 
   const ok = errors.length === 0;

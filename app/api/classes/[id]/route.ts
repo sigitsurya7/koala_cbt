@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/acl";
+import { assertMembership } from "@/lib/tenant";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const deny = await requirePermission(req, { action: "READ", resource: "API/CLASSES" });
   if (deny) return deny;
   const c = await prisma.class.findUnique({ where: { id: params.id } });
   if (!c) return NextResponse.json({ message: "Not found" }, { status: 404 });
+  const denyM = await assertMembership(req, c.schoolId);
+  if (denyM) return denyM;
   return NextResponse.json({ id: c.id, name: c.name, grade: c.grade, schoolId: c.schoolId, departmentId: c.departmentId, isActive: c.isActive });
 }
 
@@ -17,6 +20,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   try {
     const body = await req.json();
     const { departmentId, name, grade, isActive } = body ?? {};
+    const existing = await prisma.class.findUnique({ where: { id: params.id }, select: { schoolId: true } });
+    if (!existing) return NextResponse.json({ message: "Not found" }, { status: 404 });
+    const denyM = await assertMembership(req, existing.schoolId);
+    if (denyM) return denyM;
     await prisma.class.update({ where: { id: params.id }, data: { departmentId, name, grade, isActive } });
     return NextResponse.json({ id: params.id });
   } catch (e: any) {
@@ -28,6 +35,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const deny = await requirePermission(req, { action: "DELETE", resource: "API/CLASSES" });
   if (deny) return deny;
   try {
+    const existing = await prisma.class.findUnique({ where: { id: params.id }, select: { schoolId: true } });
+    if (!existing) return NextResponse.json({ message: "Not found" }, { status: 404 });
+    const denyM = await assertMembership(req, existing.schoolId);
+    if (denyM) return denyM;
     await prisma.class.delete({ where: { id: params.id } });
     return NextResponse.json({ ok: true });
   } catch (e: any) {

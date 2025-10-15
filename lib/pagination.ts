@@ -5,7 +5,7 @@ export type PageQuery = {
   perPage: number;
   q?: string;
   sort?: string;
-  order?: "asc" | "desc";
+  order: "asc" | "desc";
 };
 
 export type PagedResult<T> = {

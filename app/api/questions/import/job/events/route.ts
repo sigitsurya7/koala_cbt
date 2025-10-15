@@ -13,9 +13,11 @@ export async function GET(req: NextRequest) {
   if (!job) return new Response("", { status: 404 });
   const token = req.cookies.get(ACCESS_COOKIE)?.value;
   const payload = token ? await verifyAccessToken(token) : null;
+  if (!payload?.sub) return new Response("", { status: 401 });
   const activeSchoolId = req.cookies.get(ACTIVE_SCHOOL_COOKIE)?.value || null;
 
   let onProgress: ((payload: any) => void) | null = null;
+  let failureIndex = -1;
   const stream = new ReadableStream({
     start(controller) {
       const enc = (data: any) => `data: ${JSON.stringify(data)}\n\n`;
@@ -39,7 +41,7 @@ export async function GET(req: NextRequest) {
           job.status = "committing";
           job.processed = 0;
           job.emitter.emit("progress", { status: job.status, total: job.total, processed: 0 });
-          let failureIndex = -1;
+          failureIndex = -1;
           await prisma.$transaction(async (tx) => {
             // Pre-fetch subjects for tenant verification
             const uniqueIds = Array.from(new Set(job.items.map((it: any) => String(it.subjectId))));
@@ -66,7 +68,9 @@ export async function GET(req: NextRequest) {
                   correctKey: it.correctKey ?? undefined,
                   points: it.points ?? 1,
                   difficulty: it.difficulty ?? 1,
-                  createdById: payload?.sub || undefined,
+                  createdById: payload.sub,
+                  academicYearId: (it as any).academicYearId ?? null,
+                  periodId: (it as any).periodId ?? null,
                 },
               });
               job.processed = i + 1;
@@ -79,7 +83,7 @@ export async function GET(req: NextRequest) {
           controller.close();
         } catch (e: any) {
           job.status = "failed";
-          const row = job.processed > 0 ? job.processed + 1 : 2;
+          const row = failureIndex >= 0 ? failureIndex + 2 : (job.processed > 0 ? job.processed + 1 : 2);
           job.errors.push({ row, message: e?.message || "Gagal import" });
           job.emitter.emit("progress", { status: job.status, total: job.total, processed: job.processed, errors: job.errors.length });
           controller.close();

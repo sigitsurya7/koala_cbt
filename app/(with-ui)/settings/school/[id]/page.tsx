@@ -11,10 +11,11 @@ import PeriodModal from "./components/PeriodModal";
 import ConfirmModal from "@/components/ConfirmModal";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
+import { formatTanggalKoala } from "@/utils/koalaDates";
 
 type School = { id: string; name: string; code: string; logoUrl?: string | null; isActive: boolean };
 type AcademicYear = { id: string; label: string; startDate: string; endDate: string; isActive: boolean };
-type SchoolSetting = { id: string; key: string; type: string; value: string; updatedAt: string };
+type SchoolSetting = { id: string; key: string; type: "STRING" | "NUMBER" | "BOOLEAN" | "JSON"; value: string; updatedAt: string };
 type Period = { id: string; academicYearId: string; type: string; startDate: string; endDate: string; isActive: boolean };
 
 export default function SchoolDetailPage() {
@@ -85,8 +86,8 @@ export default function SchoolDetailPage() {
             searchPlaceholder="Cari tahun ajaran..."
             columns={[
               { key: "label", header: "Label" },
-              { key: "startDate", header: "Mulai" },
-              { key: "endDate", header: "Selesai" },
+              { key: "startDate", header: "Mulai", render: (i) => ( <span>{formatTanggalKoala(i.startDate)}</span> ) },
+              { key: "endDate", header: "Selesai", render: (i) => ( <span>{formatTanggalKoala(i.endDate)}</span> ) },
               { key: "isActive", header: "Status", render: (i) => (<Chip size="sm" color={i.isActive ? "success" : "default"} variant="flat">{i.isActive ? "Aktif" : "Nonaktif"}</Chip>) },
               { key: "actions", header: "Aksi", render: (i) => (
                 <div className="flex gap-2">
@@ -141,9 +142,9 @@ export default function SchoolDetailPage() {
             externalReloadKey={reloadPD}
             searchPlaceholder="Cari periode..."
             columns={[
-              { key: "type", header: "Jenis" },
-              { key: "startDate", header: "Mulai" },
-              { key: "endDate", header: "Selesai" },
+              { key: "type", header: "Jenis", render: (i) => ( <span>{i.type.replace('_', ' ')}</span> ) },
+              { key: "startDate", header: "Mulai", render: (i) => ( <span>{formatTanggalKoala(i.startDate)}</span> ) },
+              { key: "endDate", header: "Selesai", render: (i) => ( <span>{formatTanggalKoala(i.endDate)}</span> ) },
               { key: "isActive", header: "Status", render: (i) => (<Chip size="sm" color={i.isActive ? "success" : "default"} variant="flat">{i.isActive ? "Aktif" : "Nonaktif"}</Chip>) },
               { key: "actions", header: "Aksi", render: (i) => (
                 <div className="flex gap-2">

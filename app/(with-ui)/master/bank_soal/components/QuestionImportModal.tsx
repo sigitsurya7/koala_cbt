@@ -25,6 +25,45 @@ export default function QuestionImportModal({ isOpen, onOpenChange, subjectId, s
   const [isImporting, setIsImporting] = useState(false);
   const [importingName, setImportingName] = useState<string>("");
 
+  // Academic context
+  const [years, setYears] = useState<Array<{ id: string; label: string; isActive?: boolean }>>([]);
+  const [periods, setPeriods] = useState<Array<{ id: string; type: string; isActive?: boolean; academicYearId: string }>>([]);
+  const [fYear, setFYear] = useState<string | null>(null);
+  const [fPeriod, setFPeriod] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    // load years
+    (async () => {
+      try {
+        const r = await axios.get<{ data: Array<{ id: string; label: string; isActive?: boolean }> }>("/api/academic-years", { params: { perPage: 200 } });
+        const ys = r.data.data || [];
+        const active = ys.find((y) => (y as any).isActive) || ys[0] || null;
+        setYears(ys);
+        setFYear(active ? active.id : null);
+      } catch {
+        setYears([]);
+        setFYear(null);
+      }
+    })();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!fYear) { setPeriods([]); setFPeriod(null); return; }
+    (async () => {
+      try {
+        const r = await axios.get<{ data: Array<{ id: string; type: string; isActive?: boolean; academicYearId: string }> }>("/api/periods", { params: { academicYearId: fYear, perPage: 200 } });
+        const ps = r.data.data || [];
+        const active = ps.find((p) => (p as any).isActive) || ps[0] || null;
+        setPeriods(ps);
+        setFPeriod(active ? active.id : null);
+      } catch {
+        setPeriods([]);
+        setFPeriod(null);
+      }
+    })();
+  }, [fYear]);
+
   useEffect(() => { if (!isOpen) { setRows([]); setPreview([]); setErrors([]); setFileName(""); setIsImporting(false); setJobId(null); setJobStatus(null); setJobProcessed(0); setJobTotal(0); } }, [isOpen]);
 
   const onFile = async (f: File | null) => {
@@ -50,9 +89,10 @@ export default function QuestionImportModal({ isOpen, onOpenChange, subjectId, s
   const validate = async () => {
     if (!subjectId || rows.length === 0) { toast.error("Pilih subject & upload file"); return; }
     if (!schoolId) { toast.error("Sekolah belum dipilih"); return; }
+    // AY/Period optional, no hard block; but keep association if chosen
     setLoading(true);
     try {
-      const res = await axios.post("/api/questions/import/validate", { subjectId, rows, schoolId });
+      const res = await axios.post("/api/questions/import/validate", { subjectId, rows, schoolId, academicYearId: fYear, periodId: fPeriod });
       setErrors(res.data.errors || []);
       if (res.data.ok) { setPreview(res.data.items); toast.success("Validasi OK, siap import"); }
       else { toast.error("Ada error pada data. Perbaiki terlebih dahulu"); }
@@ -128,6 +168,20 @@ export default function QuestionImportModal({ isOpen, onOpenChange, subjectId, s
             <ModalBody>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Select label="Tahun Ajaran" selectedKeys={new Set(fYear ? [fYear] : [])} onSelectionChange={(keys) => {
+                      const k = Array.from(keys as Set<string>)[0] || null;
+                      setFYear(k);
+                    }} items={years.map((y) => ({ key: y.id, label: y.label + ((y as any).isActive ? " (Aktif)" : "") }))}>
+                      {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
+                    </Select>
+                    <Select label="Periode" selectedKeys={new Set(fPeriod ? [fPeriod] : [])} onSelectionChange={(keys) => {
+                      const k = Array.from(keys as Set<string>)[0] || null;
+                      setFPeriod(k);
+                    }} items={periods.map((p) => ({ key: p.id, label: p.type + ((p as any).isActive ? " (Aktif)" : "") }))}>
+                      {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
+                    </Select>
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
                     <Button variant="flat" startContent={<FiUpload />} onPress={() => fileInputRef.current?.click()} isDisabled={isImporting}>Upload Excel</Button>

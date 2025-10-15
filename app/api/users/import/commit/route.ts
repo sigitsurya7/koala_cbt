@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/acl";
+import { resolveSchoolContext } from "@/lib/tenant";
 import bcrypt from "bcryptjs";
 
 type Item = {
@@ -31,8 +32,15 @@ export async function POST(req: NextRequest) {
   const items: Item[] = Array.isArray(body?.items) ? body.items : [];
   if (items.length === 0) return NextResponse.json({ message: "items kosong" }, { status: 400 });
 
+  // Ensure all items belong to the caller's school context (non-super),
+  // and that items are for a single school for transactional safety.
+  const schoolIds = Array.from(new Set(items.map((i) => i.schoolId).filter(Boolean)));
+  if (schoolIds.length !== 1) return NextResponse.json({ message: "Semua item harus dalam satu sekolah" }, { status: 400 });
+  const ctx = await resolveSchoolContext(req, { overrideSchoolId: schoolIds[0] });
+  if (ctx instanceof NextResponse) return ctx;
+
+  let failureIndex = -1;
   try {
-    let failureIndex = -1;
     const count = await prisma.$transaction(async (tx) => {
       let inserted = 0;
       for (let i = 0; i < items.length; i++) {

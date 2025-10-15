@@ -212,8 +212,10 @@ async function buildRegularSession(
 
   const assignedMenuIds = new Set(menuAssignments.map((rm) => rm.menuId));
 
+  // Fetch all active menus; actual visibility to user will be controlled by roleMenu assignments.
+  // Do NOT filter by menuSuperAdmin here, since school roles may be assigned to any menu by configuration.
   const menusCandidates = await prisma.menu.findMany({
-    where: { isActive: true, menuSuperAdmin: false },
+    where: { isActive: true },
     select: { id: true, name: true, key: true, path: true, icon: true, order: true, parentId: true, visibility: true },
     orderBy: [{ order: "asc" }, { name: "asc" }],
   });
@@ -238,7 +240,7 @@ async function buildRegularSession(
       icon: m.icon,
       order: m.order,
       parentId: m.parentId,
-      visibility: m.visibility,
+      visibility: m.visibility ?? undefined,
     })),
   };
 
@@ -292,9 +294,9 @@ function filterMenusByAssignment(menus: MenuRecord[], assignedIds: Set<string>):
     }
   };
 
-  for (const id of assignedIds) {
+  assignedIds.forEach((id) => {
     includeWithParents(id);
-  }
+  });
 
   return Array.from(allowed.values()).sort((a, b) => {
     if (a.order !== b.order) return a.order - b.order;

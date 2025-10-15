@@ -49,6 +49,14 @@ export default function BankSoalPage() {
   const [qPoints, setQPoints] = useState<number>(1);
   const [qDifficulty, setQDifficulty] = useState<number>(1);
 
+  // Start builder modal (choose AY/Period)
+  const [startOpen, setStartOpen] = useState(false);
+  const [startSubject, setStartSubject] = useState<SubjectRow | null>(null);
+  const [years, setYears] = useState<Array<{ id: string; label: string; isActive?: boolean }>>([]);
+  const [periods, setPeriods] = useState<Array<{ id: string; type: string; isActive?: boolean; academicYearId: string }>>([]);
+  const [fYear, setFYear] = useState<string | null>(null);
+  const [fPeriod, setFPeriod] = useState<string | null>(null);
+
   const setActiveSchool = app.setActiveSchool;
 
   useEffect(() => {
@@ -101,6 +109,41 @@ export default function BankSoalPage() {
     }
   }, [schoolId, isSubjectOpen, questionOpen, importOpen, editing, qSubject, importSubject]);
 
+  // Load years when opening the start modal
+  useEffect(() => {
+    if (!startOpen) return;
+    (async () => {
+      try {
+        const r = await axios.get<{ data: Array<{ id: string; label: string; isActive?: boolean }> }>("/api/academic-years", { params: { perPage: 200 } });
+        const ys = r.data.data || [];
+        setYears(ys);
+        const active = ys.find((y) => (y as any).isActive) || ys[0] || null;
+        setFYear(active ? active.id : null);
+      } catch {
+        setYears([]);
+        setFYear(null);
+      }
+    })();
+  }, [startOpen]);
+
+  // Load periods for selected year in start modal
+  useEffect(() => {
+    if (!startOpen) return;
+    if (!fYear) { setPeriods([]); setFPeriod(null); return; }
+    (async () => {
+      try {
+        const r = await axios.get<{ data: Array<{ id: string; type: string; isActive?: boolean; academicYearId: string }> }>("/api/periods", { params: { academicYearId: fYear, perPage: 200 } });
+        const ps = r.data.data || [];
+        setPeriods(ps);
+        const active = ps.find((p) => (p as any).isActive) || ps[0] || null;
+        setFPeriod(active ? active.id : null);
+      } catch {
+        setPeriods([]);
+        setFPeriod(null);
+      }
+    })();
+  }, [startOpen, fYear]);
+
   const schoolItems = useMemo(() => schools.map((s) => ({ key: s.id, label: `${s.name} (${s.code})` })), [schools]);
   const deptItems = useMemo(() => departments.map((d) => ({ key: d.id, label: d.name })), [departments]);
 
@@ -136,7 +179,10 @@ export default function BankSoalPage() {
     }
   };
 
-  const openQuestion = (s: SubjectRow) => { router.push(`/master/bank_soal/${s.id}`); };
+  const openQuestion = (s: SubjectRow) => {
+    setStartSubject(s);
+    setStartOpen(true);
+  };
   const saveQuestion = async () => {
     if (!qSubject) return;
     if (!schoolId) {
@@ -288,6 +334,47 @@ export default function BankSoalPage() {
         schoolId={schoolId}
         onImported={() => setReloadKey((k) => k + 1)}
       />
+
+      {/* Start Builder Modal (AY/Period) */}
+      {startOpen && (
+        <Modal isOpen={startOpen} onOpenChange={setStartOpen} backdrop="blur">
+          <ModalContent>
+            {() => (
+              <>
+                <ModalHeader>Buat Soal — Konteks Akademik</ModalHeader>
+                <ModalBody className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input label="Mapel" isReadOnly value={startSubject?.name || "-"} />
+                  <Input label="Sekolah" isReadOnly value={schools.find((s) => s.id === (startSubject?.schoolId || schoolId))?.name || "-"} />
+                  <Select label="Tahun Ajaran" selectedKeys={new Set(fYear ? [fYear] : [])} onSelectionChange={(keys) => {
+                    const k = Array.from(keys as Set<string>)[0] || null;
+                    setFYear(k);
+                  }} items={years.map((y) => ({ key: y.id, label: y.label + ((y as any).isActive ? " (Aktif)" : "") }))}>
+                    {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
+                  </Select>
+                  <Select label="Periode" selectedKeys={new Set(fPeriod ? [fPeriod] : [])} onSelectionChange={(keys) => {
+                    const k = Array.from(keys as Set<string>)[0] || null;
+                    setFPeriod(k);
+                  }} items={periods.map((p) => ({ key: p.id, label: p.type + ((p as any).isActive ? " (Aktif)" : "") }))}>
+                    {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
+                  </Select>
+                </ModalBody>
+                <ModalFooter>
+                  <Button variant="flat" onPress={() => setStartOpen(false)}>Batal</Button>
+                  <Button color="primary" onPress={() => {
+                    if (!startSubject) { setStartOpen(false); return; }
+                    const params = new URLSearchParams();
+                    if (fYear) params.set('academicYearId', fYear);
+                    if (fPeriod) params.set('periodId', fPeriod);
+                    const qs = params.toString();
+                    setStartOpen(false);
+                    router.push(`/master/bank_soal/${startSubject.id}${qs ? `?${qs}` : ''}`);
+                  }}>Lanjut</Button>
+                </ModalFooter>
+              </>
+            )}
+          </ModalContent>
+        </Modal>
+      )}
 
       {/* Question Modal */}
       {questionOpen && (

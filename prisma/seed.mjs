@@ -117,6 +117,8 @@ try {
       id: `${subject.id}-Q1`,
       schoolId: school.id,
       subjectId: subject.id,
+      periodId: period.id,
+      academicYearId: ay.id,
       type: "MCQ",
       text: "Berapakah 2 + 2?",
       options: [{ key: "A", text: "3" }, { key: "B", text: "4" }, { key: "C", text: "5" }],
@@ -133,10 +135,12 @@ try {
     { name: 'User Management', key: 'user_management', path: '/user_management', icon: 'MdPeopleOutline', order: 3, parentKey: null, visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Dashboard', key: 'dashboard', path: '/dashboard', icon: 'FiHome', order: 1, parentKey: null, visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Settings', key: 'settings', path: '/settings', icon: 'FiSettings', order: 4, parentKey: null, visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Ujian', key: 'exams', path: '/exams', icon: 'PiExam', order: 5, parentKey: null, visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Jurusan', key: 'jurusan', path: '/master/jurusan', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Kelas', key: 'kelas', path: '/master/kelas', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Ruangan', key: 'ruangan', path: '/master/ruangan', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Bank Soal', key: 'bank_soal', path: '/master/bank_soal', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Jadwal Ujian', key: 'exams_schedule', path: '/exams/schedule', icon: null, order: 0, parentKey: 'exams', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Resource', key: 'resource', path: '/settings/resource', icon: null, order: 3, parentKey: 'settings', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Sekolah', key: 'sekolah', path: '/settings/school', icon: null, order: 2, parentKey: 'settings', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Role', key: 'role', path: '/settings/role', icon: null, order: 1, parentKey: 'settings', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
@@ -311,6 +315,20 @@ try {
         where: { roleId_menuId: { roleId: r.id, menuId: bankSoal.id } },
         update: {},
         create: { roleId: r.id, menuId: bankSoal.id },
+      });
+    }
+  }
+
+  // Link Exam Schedule menu to ADMIN_SCHOOL and GURU by default
+  const examSchedule = await prisma.menu.findUnique({ where: { key: 'exams_schedule' } });
+  if (examSchedule) {
+    const adminSchool = roles[0];
+    const guru = roles[1];
+    for (const r of [adminSchool, guru]) {
+      await prisma.roleMenu.upsert({
+        where: { roleId_menuId: { roleId: r.id, menuId: examSchedule.id } },
+        update: {},
+        create: { roleId: r.id, menuId: examSchedule.id },
       });
     }
   }

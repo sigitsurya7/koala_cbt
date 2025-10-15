@@ -22,7 +22,7 @@ const TYPES = [
 
 export default function SchoolSettingModal({ isOpen, onOpenChange, onSaved, schoolId, initial }: Props) {
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ id: undefined as string | undefined, key: "", type: "STRING" as Props["initial"]["type"], value: "" });
+  const [form, setForm] = useState({ id: undefined as string | undefined, key: "", type: "STRING" as "STRING" | "NUMBER" | "BOOLEAN" | "JSON", value: "" });
 
   useEffect(() => {
     if (initial) setForm({ id: initial.id, key: initial.key, type: initial.type, value: initial.value });
