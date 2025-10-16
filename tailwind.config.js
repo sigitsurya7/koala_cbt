@@ -69,13 +69,13 @@ const config = {
           },
           layout: {
             radius: {
-              small: "0.5rem",
-              medium: "1rem",
-              large: "1.5rem",
+              // small: "0.5rem",
+              // medium: "1rem",
+              // large: "1.5rem",
             },
             boxShadow: {
-              soft: "0 2px 8px rgba(55,65,81,0.08)",
-              hover: "0 4px 12px rgba(55,65,81,0.12)",
+              // soft: "0 2px 8px rgba(55,65,81,0.08)",
+              // hover: "0 4px 12px rgba(55,65,81,0.12)",
             },
           },
         },

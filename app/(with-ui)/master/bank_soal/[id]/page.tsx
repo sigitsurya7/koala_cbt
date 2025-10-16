@@ -6,14 +6,29 @@ import axios from "axios";
 import { Button, Card, CardBody, Chip, Input, Select, SelectItem, Textarea, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/react";
 import toast from "react-hot-toast";
 import { FiArrowLeft, FiArrowRight, FiMenu, FiPlus, FiSave, FiTrash, FiUpload } from "react-icons/fi";
+import { MdFilePresent, MdAudiotrack } from "react-icons/md";
 import QuestionImportModal from "../components/QuestionImportModal";
 import { useApp } from "@/stores/useApp";
 
 type Subject = { id: string; name: string; grade?: number | null; departmentName?: string | null };
 type MCQOption = { key: string; text: string };
+type DraftBase = {
+  id?: string;
+  type: "MCQ" | "ESSAY";
+  text: string;
+  points: number;
+  difficulty: number;
+  attachmentName?: string | null;
+  attachmentUrl?: string | null;
+  attachmentMime?: string | null;
+  audioName?: string | null;
+  audioUrl?: string | null;
+  attachmentFile?: File | null;
+  audioFile?: File | null;
+};
 type DraftItem =
-  | { id?: string; type: "MCQ"; text: string; options: MCQOption[]; correctKey: string; points: number; difficulty: number }
-  | { id?: string; type: "ESSAY"; text: string; attachmentName?: string | null; audioName?: string | null; points: number; difficulty: number };
+  | (DraftBase & { type: "MCQ"; options: MCQOption[]; correctKey: string })
+  | (DraftBase & { type: "ESSAY" });
 
 const MAX_OPTIONS = 5;
 
@@ -47,6 +62,7 @@ export default function QuestionBuilderPage() {
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [attPreview, setAttPreview] = useState<{ open: boolean; src: string | null; title?: string | null; mime?: string | null }>({ open: false, src: null, title: null, mime: null });
 
   // Academic context filters
   const [years, setYears] = useState<Array<{ id: string; label: string; isActive?: boolean }>>([]);
@@ -117,11 +133,11 @@ export default function QuestionBuilderPage() {
         if (fYear) params.academicYearId = fYear;
         if (fPeriod) params.periodId = fPeriod;
         const qres = await axios.get(`/api/questions`, { params });
-        const arr = (qres.data.data || []) as Array<{ id: string; type: "MCQ"|"ESSAY"; text: string; options?: MCQOption[]; correctKey?: string; points?: number; difficulty?: number }>;
+        const arr = (qres.data.data || []) as Array<{ id: string; type: "MCQ"|"ESSAY"; text: string; options?: MCQOption[]; correctKey?: string; points?: number; difficulty?: number; attachmentUrl?: string | null; attachmentType?: string | null; audioUrl?: string | null }>;
         if (arr.length > 0) {
           const mapped: DraftItem[] = arr.map((q) => q.type === "MCQ"
-            ? { id: q.id, type: q.type, text: q.text, options: (q.options || []).slice(0, 5), correctKey: q.correctKey || (q.options?.[0]?.key || "A"), points: q.points ?? 1, difficulty: q.difficulty ?? 1 }
-            : { id: q.id, type: q.type, text: q.text, attachmentName: null, audioName: null, points: q.points ?? 1, difficulty: q.difficulty ?? 1 });
+            ? { id: q.id, type: q.type, text: q.text, options: (q.options || []).slice(0, 5), correctKey: q.correctKey || (q.options?.[0]?.key || "A"), points: q.points ?? 1, difficulty: q.difficulty ?? 1, attachmentUrl: q.attachmentUrl || null, attachmentMime: q.attachmentType || null, audioUrl: q.audioUrl || null }
+            : { id: q.id, type: q.type, text: q.text, attachmentName: null, audioName: null, attachmentUrl: q.attachmentUrl || null, attachmentMime: q.attachmentType || null, audioUrl: q.audioUrl || null, points: q.points ?? 1, difficulty: q.difficulty ?? 1 });
           if (mounted) { setItems(mapped); setIndex(0); }
         } else {
           if (mounted) { setItems([{ type: "MCQ", text: "", options: [ { key: "A", text: "" }, { key: "B", text: "" }, { key: "C", text: "" }, { key: "D", text: "" } ], correctKey: "A", points: 1, difficulty: 1 }]); setIndex(0); }
@@ -152,7 +168,12 @@ export default function QuestionBuilderPage() {
   // Persist to localStorage on changes (autosave draft)
   useEffect(() => {
     try {
-      const data = JSON.stringify({ items, index });
+      // sanitize: exclude preview URLs
+      const safe = items.map((it) => {
+        const { attachmentUrl, audioUrl, attachmentFile, audioFile, ...rest } = it as any;
+        return rest;
+      });
+      const data = JSON.stringify({ items: safe, index });
       localStorage.setItem(draftKey, data);
     } catch {}
   }, [items, index, draftKey]);
@@ -227,6 +248,11 @@ export default function QuestionBuilderPage() {
   const removeQuestion = (i: number) => {
     setItems((arr) => {
       const ns = arr.slice();
+      const victim = ns[i] as any;
+      try {
+        if (victim?.attachmentUrl) URL.revokeObjectURL(victim.attachmentUrl);
+        if (victim?.audioUrl) URL.revokeObjectURL(victim.audioUrl);
+      } catch {}
       ns.splice(i, 1);
       const newIdx = Math.max(0, Math.min(index, ns.length - 1));
       setIndex(newIdx);
@@ -257,14 +283,42 @@ export default function QuestionBuilderPage() {
     setItems((arr) => arr.map((it, i) => (i === index ? { ...current, options: opts, correctKey: newCorrect } : it)));
   };
 
+  const uploadFile = async (file: File): Promise<{ url: string; mime: string } | null> => {
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await axios.post('/api/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      if (r.data?.ok && r.data?.url) return { url: r.data.url, mime: r.data.mime };
+      return null;
+    } catch { return null; }
+  };
+
   const saveAll = async () => {
     try {
       // validate minimal
       if (!subjectId || items.length === 0) { toast.error("Tidak ada soal untuk disimpan"); return; }
       if (!schoolId) { toast.error("Sekolah belum dipilih"); return; }
-      const payload = { subjectId, schoolId, items: items.map((it) => (it.type === "MCQ"
-        ? { id: (it as any).id, type: it.type, text: it.text, options: it.options, correctKey: it.correctKey, points: it.points, difficulty: it.difficulty, academicYearId: fYear, periodId: fPeriod }
-        : { id: (it as any).id, type: it.type, text: it.text, points: it.points, difficulty: it.difficulty, academicYearId: fYear, periodId: fPeriod })) };
+      // Upload files (if any) and build payload
+      const outItems: any[] = [];
+      for (const it of items) {
+        let attachmentUrl = (it as any).attachmentUrl || null;
+        let attachmentType = (it as any).attachmentMime || null;
+        let audioUrl = (it as any).audioUrl || null;
+        if ((it as any).attachmentFile) {
+          const res = await uploadFile((it as any).attachmentFile as File);
+          if (res) { attachmentUrl = res.url; attachmentType = res.mime; }
+        }
+        if ((it as any).audioFile) {
+          const res = await uploadFile((it as any).audioFile as File);
+          if (res) { audioUrl = res.url; }
+        }
+        if (it.type === 'MCQ') {
+          outItems.push({ id: (it as any).id, type: it.type, text: it.text, options: (it as any).options, correctKey: (it as any).correctKey, points: it.points, difficulty: it.difficulty, academicYearId: fYear, periodId: fPeriod, attachmentUrl, attachmentType, audioUrl });
+        } else {
+          outItems.push({ id: (it as any).id, type: it.type, text: it.text, points: it.points, difficulty: it.difficulty, academicYearId: fYear, periodId: fPeriod, attachmentUrl, attachmentType, audioUrl });
+        }
+      }
+      const payload = { subjectId, schoolId, items: outItems };
       const res = await axios.post("/api/questions/sync", payload);
       if (res.data?.ok) {
         clearDraft();
@@ -341,24 +395,130 @@ export default function QuestionBuilderPage() {
                         {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
                       </Select>
                     </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Input
+                          label="Lampiran (gambar/PDF)"
+                          labelPlacement="outside"
+                          description="Disimpan lokal sementara, tidak diunggah."
+                          startContent={<MdFilePresent />}
+                          fullWidth={false}
+                          className="w-max"
+                          type="file"
+                          accept="image/*,application/pdf"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0] || null;
+                            if (!f) { setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), attachmentFile: null, attachmentName: null, attachmentUrl: null, attachmentMime: null } : it))); return; }
+                            const ok = f.type.startsWith('image/') || f.type === 'application/pdf';
+                            if (!ok) { toast.error('File harus gambar atau PDF'); (e.target as HTMLInputElement).value=''; return; }
+                            const url = URL.createObjectURL(f);
+                            setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), attachmentFile: f, attachmentName: f.name, attachmentUrl: url, attachmentMime: f.type } : it)));
+                          }}
+                        />
+                        {(current as any).attachmentUrl && (
+                          <div className="flex items-center gap-2">
+                            {((current as any).attachmentMime || '').startsWith('image/') ? (
+                              <img src={(current as any).attachmentUrl} alt={(current as any).attachmentName || 'attachment'} className="w-24 h-24 object-cover rounded cursor-pointer border" onClick={() => setAttPreview({ open: true, src: (current as any).attachmentUrl || null, title: (current as any).attachmentName, mime: (current as any).attachmentMime })} />
+                            ) : (
+                              <Button variant="flat" onPress={() => setAttPreview({ open: true, src: (current as any).attachmentUrl || null, title: (current as any).attachmentName, mime: (current as any).attachmentMime })}>Lihat PDF: {(current as any).attachmentName}</Button>
+                            )}
+                            <Button size="sm" variant="flat" color="danger" onPress={() => {
+                              try { if ((current as any).attachmentUrl) URL.revokeObjectURL((current as any).attachmentUrl); } catch {}
+                              setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), attachmentFile: null, attachmentName: null, attachmentUrl: null, attachmentMime: null } : it)));
+                            }}>Hapus</Button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Input
+                          label="Audio (opsional)"
+                          labelPlacement="outside"
+                          description="Nama file akan tersimpan lokal sampai Anda menyimpan."
+                          startContent={<MdAudiotrack />}
+                          fullWidth={false}
+                          className="w-max"
+                          type="file"
+                          accept="audio/*"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0] || null;
+                            if (!f) { setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), audioFile: null, audioName: null, audioUrl: null } : it))); return; }
+                            const url = URL.createObjectURL(f);
+                            setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), audioFile: f, audioName: f.name, audioUrl: url } : it)));
+                          }}
+                        />
+                        {(current as any).audioUrl && (
+                          <div className="flex items-center gap-2">
+                            <audio controls src={(current as any).audioUrl} className="w-full" />
+                            <Button size="sm" variant="flat" color="danger" onPress={() => {
+                              try { if ((current as any).audioUrl) URL.revokeObjectURL((current as any).audioUrl); } catch {}
+                              setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), audioFile: null, audioName: null, audioUrl: null } : it)));
+                            }}>Hapus</Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-sm">Lampiran (opsional)</label>
-                      <input type="file" onChange={(e) => {
+                    <div className="space-y-2">
+                      <Input
+                        label="Lampiran (gambar/PDF)"
+                        labelPlacement="outside"
+                        description="Disimpan lokal sementara, tidak diunggah."
+                        startContent={<MdFilePresent />}
+                        fullWidth={false}
+                        className="w-max"
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={(e) => {
                         const f = e.target.files?.[0] || null;
-                        setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), attachmentName: f ? f.name : null } : it)));
-                      }} />
-                      <div className="text-xs opacity-70 mt-1">Disimpan lokal sementara, tidak diunggah hingga Anda klik Simpan.</div>
+                          if (!f) { setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), attachmentFile: null, attachmentName: null, attachmentUrl: null, attachmentMime: null } : it))); return; }
+                          const ok = f.type.startsWith('image/') || f.type === 'application/pdf';
+                          if (!ok) { toast.error('File harus gambar atau PDF'); (e.target as HTMLInputElement).value=''; return; }
+                          const url = URL.createObjectURL(f);
+                          setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), attachmentFile: f, attachmentName: f.name, attachmentUrl: url, attachmentMime: f.type } : it)));
+                        }}
+                      />
+                      {(current as any).attachmentUrl && (
+                        <div className="flex items-center gap-2">
+                          {((current as any).attachmentMime || '').startsWith('image/') ? (
+                            <img src={(current as any).attachmentUrl} alt={(current as any).attachmentName || 'attachment'} className="w-24 h-24 object-cover rounded cursor-pointer border" onClick={() => setAttPreview({ open: true, src: (current as any).attachmentUrl || null, title: (current as any).attachmentName, mime: (current as any).attachmentMime })} />
+                          ) : (
+                            <Button variant="flat" onPress={() => setAttPreview({ open: true, src: (current as any).attachmentUrl || null, title: (current as any).attachmentName, mime: (current as any).attachmentMime })}>Lihat PDF: {(current as any).attachmentName}</Button>
+                          )}
+                          <Button size="sm" variant="flat" color="danger" onPress={() => {
+                            try { if ((current as any).attachmentUrl) URL.revokeObjectURL((current as any).attachmentUrl); } catch {}
+                            setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), attachmentFile: null, attachmentName: null, attachmentUrl: null, attachmentMime: null } : it)));
+                          }}>Hapus</Button>
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <label className="text-sm">Audio (opsional)</label>
-                      <input type="file" accept="audio/*" onChange={(e) => {
-                        const f = e.target.files?.[0] || null;
-                        setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), audioName: f ? f.name : null } : it)));
-                      }} />
-                      <div className="text-xs opacity-70 mt-1">Nama file akan tersimpan lokal sampai Anda menyimpan.</div>
+                    <div className="space-y-2">
+                      <Input
+                        label="Audio (opsional)"
+                        labelPlacement="outside"
+                        description="Nama file akan tersimpan lokal sampai Anda menyimpan."
+                        startContent={<MdAudiotrack />}
+                        fullWidth={false}
+                        className="w-max"
+                        type="file"
+                        accept="audio/*"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0] || null;
+                        if (!f) { setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), audioFile: null, audioName: null, audioUrl: null } : it))); return; }
+                          const url = URL.createObjectURL(f);
+                        setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), audioFile: f, audioName: f.name, audioUrl: url } : it)));
+                        }}
+                      />
+                      {(current as any).audioUrl && (
+                        <div className="flex items-center gap-2">
+                          <audio controls src={(current as any).audioUrl} className="w-full" />
+                          <Button size="sm" variant="flat" color="danger" onPress={() => {
+                            try { if ((current as any).audioUrl) URL.revokeObjectURL((current as any).audioUrl); } catch {}
+                            setItems((arr) => arr.map((it, i) => (i === index ? { ...(it as any), audioFile: null, audioName: null, audioUrl: null } : it)));
+                          }}>Hapus</Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -391,21 +551,6 @@ export default function QuestionBuilderPage() {
 
       {/* Right panel */}
       <div className="lg:col-span-1 space-y-4 sm:order-1">
-        <Card>
-          <CardBody className="space-y-3">
-            <div className="font-semibold">Konteks Akademik</div>
-            <Select label="Tahun Ajaran" selectedKeys={new Set(fYear ? [fYear] : [])} onSelectionChange={(keys) => {
-              const k = Array.from(keys as Set<string>)[0] || null; setFYear(k);
-            }} items={years.map((y) => ({ key: y.id, label: y.label + ((y as any).isActive ? " (Aktif)" : "") }))}>
-              {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
-            </Select>
-            <Select label="Periode" selectedKeys={new Set(fPeriod ? [fPeriod] : [])} onSelectionChange={(keys) => {
-              const k = Array.from(keys as Set<string>)[0] || null; setFPeriod(k);
-            }} items={periods.map((p) => ({ key: p.id, label: p.type + ((p as any).isActive ? " (Aktif)" : "") }))}>
-              {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
-            </Select>
-          </CardBody>
-        </Card>
         <Card>
           <CardBody className="space-y-3">
             <div className="flex items-center justify-between">
@@ -461,6 +606,21 @@ export default function QuestionBuilderPage() {
             )}
           </CardBody>
         </Card>
+        <Card>
+          <CardBody className="space-y-3">
+            <div className="font-semibold">Konteks Akademik</div>
+            <Select label="Tahun Ajaran" selectedKeys={new Set(fYear ? [fYear] : [])} onSelectionChange={(keys) => {
+              const k = Array.from(keys as Set<string>)[0] || null; setFYear(k);
+            }} items={years.map((y) => ({ key: y.id, label: y.label + ((y as any).isActive ? " (Aktif)" : "") }))}>
+              {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
+            </Select>
+            <Select label="Periode" selectedKeys={new Set(fPeriod ? [fPeriod] : [])} onSelectionChange={(keys) => {
+              const k = Array.from(keys as Set<string>)[0] || null; setFPeriod(k);
+            }} items={periods.map((p) => ({ key: p.id, label: p.type + ((p as any).isActive ? " (Aktif)" : "") }))}>
+              {(it) => <SelectItem key={it.key}>{it.label}</SelectItem>}
+            </Select>
+          </CardBody>
+        </Card>
       </div>
 
       {/* Load draft modal */}
@@ -514,6 +674,27 @@ export default function QuestionBuilderPage() {
         schoolId={schoolId}
         onImported={() => toast.success("Import selesai")}
       />
+
+      {/* Attachment Preview Modal */}
+      <Modal isOpen={attPreview.open} onOpenChange={(v) => setAttPreview((s) => ({ ...s, open: v }))} size="xl" backdrop="blur">
+        <ModalContent>
+          {() => (
+            <>
+              <ModalHeader>{attPreview.title || 'Preview Lampiran'}</ModalHeader>
+              <ModalBody>
+                {attPreview.src && (attPreview.mime || '').startsWith('image/') ? (
+                  <img src={attPreview.src} alt={attPreview.title || 'attachment'} className="max-h-[70vh] w-auto object-contain mx-auto" />
+                ) : attPreview.src ? (
+                  <iframe src={attPreview.src} className="w-full h-[70vh]" title={attPreview.title || 'PDF'}></iframe>
+                ) : null}
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="flat" onPress={() => setAttPreview({ open: false, src: null, title: null, mime: null })}>Tutup</Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

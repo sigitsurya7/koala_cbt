@@ -7,6 +7,8 @@ import { z } from "zod";
 import { handleApiError, zparse } from "@/lib/validate";
 import { ACCESS_COOKIE, verifyAccessToken } from "@/lib/auth";
 import { resolveSchoolContext } from "@/lib/tenant";
+import fs from "fs/promises";
+import path from "path";
 
 const OptionSchema = z.object({ key: z.string().min(1), text: z.string().min(1) });
 const ItemSchema = z.object({
@@ -19,6 +21,9 @@ const ItemSchema = z.object({
   difficulty: z.number().int().min(0).max(10).default(1),
   academicYearId: z.string().optional().nullable(),
   periodId: z.string().optional().nullable(),
+  attachmentUrl: z.string().url().optional().nullable(),
+  attachmentType: z.string().optional().nullable(),
+  audioUrl: z.string().url().optional().nullable(),
 });
 
 const Schema = z.object({ subjectId: z.string().min(1), items: z.array(ItemSchema) });
@@ -39,6 +44,7 @@ export async function POST(req: NextRequest) {
     const payload = token ? await verifyAccessToken(token) : null;
     if (!payload?.sub) return NextResponse.json({ message: "Unauthenticated" }, { status: 401 });
     const existing = await prisma.question.findMany({ where: { subjectId, schoolId: ctx.schoolId } });
+    const existingMap = new Map(existing.map((q) => [q.id, q] as const));
     const existingIds = new Set(existing.map((q) => q.id));
     const desiredIds = new Set(items.filter((i) => i.id).map((i) => i.id as string));
 
@@ -46,8 +52,16 @@ export async function POST(req: NextRequest) {
     const toUpdate = items.filter((i) => i.id && existingIds.has(i.id));
     const toCreate = items.filter((i) => !i.id);
 
+    const deleteUrls: Array<string> = [];
+
     await prisma.$transaction(async (tx) => {
       if (toDelete.length) await tx.question.deleteMany({ where: { id: { in: toDelete } } });
+      // schedule deletion of files for deleted questions
+      for (const id of toDelete) {
+        const old = existingMap.get(id);
+        if (old?.attachmentUrl) deleteUrls.push(old.attachmentUrl);
+        if (old?.audioUrl) deleteUrls.push(old.audioUrl);
+      }
       for (const it of toUpdate) {
         // optional validate AY/Period per item
         if (it.academicYearId) {
@@ -59,9 +73,19 @@ export async function POST(req: NextRequest) {
           if (!p || p.schoolId !== ctx.schoolId) throw new Error("Periode tidak valid");
           if (it.academicYearId && p.academicYearId !== it.academicYearId) throw new Error("Periode tidak sesuai tahun ajaran");
         }
+        // schedule deletion if old files are replaced/cleared
+        const old = existingMap.get(it.id!);
+        if (old) {
+          const hasAtt = Object.prototype.hasOwnProperty.call(it as any, 'attachmentUrl');
+          const hasAud = Object.prototype.hasOwnProperty.call(it as any, 'audioUrl');
+          const newAtt = hasAtt ? ((it as any).attachmentUrl ?? null) : old.attachmentUrl;
+          const newAud = hasAud ? ((it as any).audioUrl ?? null) : old.audioUrl;
+          if (old.attachmentUrl && old.attachmentUrl !== newAtt) deleteUrls.push(old.attachmentUrl);
+          if (old.audioUrl && old.audioUrl !== newAud) deleteUrls.push(old.audioUrl);
+        }
         await tx.question.update({
           where: { id: it.id },
-          data: { type: it.type, text: it.text, options: it.options as any, correctKey: it.correctKey, points: it.points, difficulty: it.difficulty, academicYearId: (it as any).academicYearId ?? null, periodId: (it as any).periodId ?? null },
+          data: ({ type: it.type, text: it.text, options: it.options as any, correctKey: it.correctKey, points: it.points, difficulty: it.difficulty, academicYearId: (it as any).academicYearId ?? null, periodId: (it as any).periodId ?? null, attachmentUrl: (it as any).attachmentUrl ?? null, attachmentType: (it as any).attachmentType ?? null, audioUrl: (it as any).audioUrl ?? null } as any),
         });
       }
       for (const it of toCreate) {
@@ -75,10 +99,19 @@ export async function POST(req: NextRequest) {
           if (it.academicYearId && p.academicYearId !== it.academicYearId) throw new Error("Periode tidak sesuai tahun ajaran");
         }
         await tx.question.create({
-          data: { schoolId: subj.schoolId, subjectId, type: it.type, text: it.text, options: it.options as any, correctKey: it.correctKey, points: it.points, difficulty: it.difficulty, createdById: payload.sub, academicYearId: (it as any).academicYearId ?? null, periodId: (it as any).periodId ?? null },
+          data: ({ schoolId: subj.schoolId, subjectId, type: it.type, text: it.text, options: it.options as any, correctKey: it.correctKey, points: it.points, difficulty: it.difficulty, createdById: payload.sub, academicYearId: (it as any).academicYearId ?? null, periodId: (it as any).periodId ?? null, attachmentUrl: (it as any).attachmentUrl ?? null, attachmentType: (it as any).attachmentType ?? null, audioUrl: (it as any).audioUrl ?? null } as any),
         });
       }
     }, { timeout: 120_000, maxWait: 10_000 });
+
+    // After successful transaction, delete files on disk for collected URLs
+    const isLocal = (url: string) => url && url.startsWith("/uploads/");
+    const toPath = (url: string) => path.join(process.cwd(), "public", url.replace(/^\//, ""));
+    for (const u of deleteUrls) {
+      if (!u) continue;
+      if (!isLocal(u)) continue;
+      try { await fs.unlink(toPath(u)); } catch {}
+    }
 
     return NextResponse.json({ ok: true, created: toCreate.length, updated: toUpdate.length, deleted: toDelete.length });
   } catch (e: any) {

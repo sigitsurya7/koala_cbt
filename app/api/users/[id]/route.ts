@@ -7,7 +7,7 @@ import { z } from "zod";
 import { handleApiError, zparse } from "@/lib/validate";
 import bcrypt from "bcryptjs";
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const deny = await requirePermission(req, { action: "UPDATE", resource: "API/USERS" });
   if (deny) return deny;
   const csrf = assertCsrf(req);
@@ -15,6 +15,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   try {
     const schema = z.object({
       name: z.string().trim().min(1).optional(),
+      username: z.string().min(3).optional(),
       email: z.string().email().optional(),
       password: z.string().min(6).optional(),
       type: z.enum(["SISWA", "GURU", "STAFF", "ADMIN"]).optional(),
@@ -24,8 +25,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       roleId: z.string().optional().nullable(),
     });
     const payload = zparse(schema, await req.json());
+    const { id: userId } = await params;
     const user = await prisma.user.findUnique({
-      where: { id: params.id },
+      where: { id: userId },
       include: {
         userRoles: true,
         schools: true,
@@ -81,92 +83,92 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (payload.password) updateData.passwordHash = await bcrypt.hash(payload.password, 10);
 
     await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: params.id }, data: updateData });
+      await tx.user.update({ where: { id: userId }, data: updateData });
 
       if (finalIsSuperAdmin) {
         await Promise.all([
-          tx.userSchool.deleteMany({ where: { userId: params.id } }),
-          tx.userRole.deleteMany({ where: { userId: params.id } }),
-          tx.studentDetail.deleteMany({ where: { userId: params.id } }),
-          tx.teacherDetail.deleteMany({ where: { userId: params.id } }),
-          tx.staffDetail.deleteMany({ where: { userId: params.id } }),
+          tx.userSchool.deleteMany({ where: { userId: userId } }),
+          tx.userRole.deleteMany({ where: { userId: userId } }),
+          tx.studentDetail.deleteMany({ where: { userId: userId } }),
+          tx.teacherDetail.deleteMany({ where: { userId: userId } }),
+          tx.staffDetail.deleteMany({ where: { userId: userId } }),
         ]);
         return;
       }
 
       const ensureMembership = async () => {
         if (!targetSchoolId) return;
-        const existing = await tx.userSchool.findFirst({ where: { userId: params.id, schoolId: targetSchoolId } });
+        const existing = await tx.userSchool.findFirst({ where: { userId: userId, schoolId: targetSchoolId } });
         if (existing) {
           await tx.userSchool.updateMany({
-            where: { userId: params.id, schoolId: targetSchoolId },
+            where: { userId: userId, schoolId: targetSchoolId },
             data: { isActive: true },
           });
         } else {
           await tx.userSchool.create({
-            data: { userId: params.id, schoolId: targetSchoolId, classId: null, isActive: true },
+            data: { userId: userId, schoolId: targetSchoolId, classId: null, isActive: true },
           });
         }
         await tx.userSchool.deleteMany({
-          where: { userId: params.id, schoolId: { not: targetSchoolId } },
+          where: { userId: userId, schoolId: { not: targetSchoolId } },
         });
       };
 
       await ensureMembership();
 
       if (targetSchoolId && targetRoleId) {
-        await tx.userRole.deleteMany({ where: { userId: params.id, schoolId: targetSchoolId } });
+        await tx.userRole.deleteMany({ where: { userId: userId, schoolId: targetSchoolId } });
         await tx.userRole.create({
-          data: { userId: params.id, roleId: targetRoleId, schoolId: targetSchoolId },
+          data: { userId: userId, roleId: targetRoleId, schoolId: targetSchoolId },
         });
       }
 
       if (finalType === "SISWA") {
         await tx.studentDetail.upsert({
-          where: { userId: params.id },
+          where: { userId: userId },
           update: { schoolId: targetSchoolId! },
-          create: { userId: params.id, schoolId: targetSchoolId! },
+          create: { userId: userId, schoolId: targetSchoolId! },
         });
-        await tx.teacherDetail.deleteMany({ where: { userId: params.id } });
-        await tx.staffDetail.deleteMany({ where: { userId: params.id } });
+        await tx.teacherDetail.deleteMany({ where: { userId: userId } });
+        await tx.staffDetail.deleteMany({ where: { userId: userId } });
       } else if (finalType === "GURU") {
         await tx.teacherDetail.upsert({
-          where: { userId_schoolId: { userId: params.id, schoolId: targetSchoolId! } },
+          where: { userId_schoolId: { userId: userId, schoolId: targetSchoolId! } },
           update: { schoolId: targetSchoolId! },
-          create: { userId: params.id, schoolId: targetSchoolId! },
+          create: { userId: userId, schoolId: targetSchoolId! },
         });
-        await tx.studentDetail.deleteMany({ where: { userId: params.id } });
-        await tx.staffDetail.deleteMany({ where: { userId: params.id } });
+        await tx.studentDetail.deleteMany({ where: { userId: userId } });
+        await tx.staffDetail.deleteMany({ where: { userId: userId } });
       } else if (finalType === "STAFF") {
         await tx.staffDetail.upsert({
-          where: { userId_schoolId: { userId: params.id, schoolId: targetSchoolId! } },
+          where: { userId_schoolId: { userId: userId, schoolId: targetSchoolId! } },
           update: { schoolId: targetSchoolId! },
-          create: { userId: params.id, schoolId: targetSchoolId! },
+          create: { userId: userId, schoolId: targetSchoolId! },
         });
-        await tx.studentDetail.deleteMany({ where: { userId: params.id } });
-        await tx.teacherDetail.deleteMany({ where: { userId: params.id } });
+        await tx.studentDetail.deleteMany({ where: { userId: userId } });
+        await tx.teacherDetail.deleteMany({ where: { userId: userId } });
       } else {
         await Promise.all([
-          tx.studentDetail.deleteMany({ where: { userId: params.id } }),
-          tx.teacherDetail.deleteMany({ where: { userId: params.id } }),
-          tx.staffDetail.deleteMany({ where: { userId: params.id } }),
+          tx.studentDetail.deleteMany({ where: { userId: userId } }),
+          tx.teacherDetail.deleteMany({ where: { userId: userId } }),
+          tx.staffDetail.deleteMany({ where: { userId: userId } }),
         ]);
       }
     });
 
-    return NextResponse.json({ id: params.id });
+    return NextResponse.json({ id: userId });
   } catch (e: any) {
     return handleApiError(e);
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const deny = await requirePermission(req, { action: "DELETE", resource: "API/USERS" });
   if (deny) return deny;
   const csrf = assertCsrf(req);
   if (csrf) return csrf;
   try {
-    const id = params.id;
+    const { id } = await params;
     await prisma.$transaction(async (tx) => {
       // Hard checks: prevent deletion if user is author of Questions/Exams
       const [qCount, eCount] = await Promise.all([

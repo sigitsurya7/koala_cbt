@@ -103,6 +103,7 @@ model AcademicYear {
   periods Period[]
   exams   Exam[]
   questions Question[]
+  examRoom ExamRoom[]
 }
 
 model Period {
@@ -118,6 +119,7 @@ model Period {
 
   exams Exam[]
   questions Question[]
+  examRoom ExamRoom[]
 
   @@index([schoolId, academicYearId])
 }
@@ -147,6 +149,7 @@ model User {
   staffDetail            StaffDetail[]
   refreshTokens          RefreshToken[]
   questionCollaborations QuestionCollaborator[]
+  examRoomMember         ExamRoomMember[]
 }
 
 model UserSchool {
@@ -292,6 +295,7 @@ model Class {
   exams           Exam[]
   studentDetails  StudentDetail[]  @relation("ClassStudentDetails")
   teacherSubjects TeacherSubject[]
+  examRoomClass ExamRoomClass[]
 
   @@index([schoolId, departmentId])
 }
@@ -343,6 +347,9 @@ model Question {
   correctKey  String?
   points      Int      @default(1)
   difficulty  Int      @default(1)
+  attachmentUrl  String?
+  attachmentType String?
+  audioUrl       String?
   createdById String
   createdBy   User     @relation("QuestionCreatedBy", fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
@@ -386,14 +393,21 @@ model Exam {
 }
 
 model ExamRoom {
-  id     String @id @default(cuid())
-  examId String
-  exam   Exam   @relation(fields: [examId], references: [id])
-  roomId String
-  room   Room   @relation(fields: [roomId], references: [id])
+  id       String  @id @default(cuid())
+  examId   String?
+  exam     Exam?   @relation(fields: [examId], references: [id])
+  roomId   String
+  room     Room    @relation(fields: [roomId], references: [id])
+
+  academicYearId String?
+  academicYear   AcademicYear? @relation(fields: [academicYearId], references: [id])
+  periodId       String?
+  period         Period?       @relation(fields: [periodId], references: [id])
 
   token       ExamToken?
   supervisors ExamSupervisor[]
+  classes     ExamRoomClass[]
+  members     ExamRoomMember[]
 }
 
 model ExamToken {
@@ -405,6 +419,22 @@ model ExamToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
   isActive  Boolean  @default(true)
+}
+
+model ExamRoomClass {
+  id          String   @id @default(cuid())
+  examRoomId  String
+  examRoom    ExamRoom @relation(fields: [examRoomId], references: [id])
+  classId     String
+  class       Class    @relation(fields: [classId], references: [id])
+}
+
+model ExamRoomMember {
+  id          String   @id @default(cuid())
+  examRoomId  String
+  examRoom    ExamRoom @relation(fields: [examRoomId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
 }
 
 model ExamSupervisor {

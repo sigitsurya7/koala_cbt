@@ -140,7 +140,8 @@ try {
     { name: 'Kelas', key: 'kelas', path: '/master/kelas', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Ruangan', key: 'ruangan', path: '/master/ruangan', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Bank Soal', key: 'bank_soal', path: '/master/bank_soal', icon: null, order: 0, parentKey: 'master', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
-    { name: 'Jadwal Ujian', key: 'exams_schedule', path: '/exams/schedule', icon: null, order: 0, parentKey: 'exams', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Kartu Ujian', key: 'exams_cards', path: '/exams/cards', icon: null, order: 0, parentKey: 'exams', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
+    { name: 'Jadwal Ujian', key: 'exams_schedule', path: '/exams/schedule', icon: null, order: 1, parentKey: 'exams', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Resource', key: 'resource', path: '/settings/resource', icon: null, order: 3, parentKey: 'settings', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Sekolah', key: 'sekolah', path: '/settings/school', icon: null, order: 2, parentKey: 'settings', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
     { name: 'Role', key: 'role', path: '/settings/role', icon: null, order: 1, parentKey: 'settings', visibility: 'PRIVATE', isActive: true, menuSuperAdmin: true },
@@ -319,8 +320,9 @@ try {
     }
   }
 
-  // Link Exam Schedule menu to ADMIN_SCHOOL and GURU by default
+  // Link Exam Cards & Schedule menus to roles
   const examSchedule = await prisma.menu.findUnique({ where: { key: 'exams_schedule' } });
+  const examCards = await prisma.menu.findUnique({ where: { key: 'exams_cards' } });
   if (examSchedule) {
     const adminSchool = roles[0];
     const guru = roles[1];
@@ -329,6 +331,17 @@ try {
         where: { roleId_menuId: { roleId: r.id, menuId: examSchedule.id } },
         update: {},
         create: { roleId: r.id, menuId: examSchedule.id },
+      });
+    }
+  }
+  if (examCards) {
+    const adminSchool = roles[0];
+    const guru = roles[1];
+    for (const r of [adminSchool, guru]) {
+      await prisma.roleMenu.upsert({
+        where: { roleId_menuId: { roleId: r.id, menuId: examCards.id } },
+        update: {},
+        create: { roleId: r.id, menuId: examCards.id },
       });
     }
   }

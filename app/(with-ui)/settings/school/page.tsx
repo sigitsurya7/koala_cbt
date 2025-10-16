@@ -7,7 +7,8 @@ import toast from "react-hot-toast";
 import SchoolModal, { SchoolForm } from "./components/SchoolModal";
 import DataTable, { type FetchParams, type Paged } from "@/components/DataTable";
 import { FiEdit, FiTrash, FiPlus } from "react-icons/fi";
-import ConfirmModal from "@/components/ConfirmModal";
+// ConfirmModal no longer used here; using custom modal with input confirmation
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Input } from "@heroui/react";
 import { useRouter } from "next/navigation";
 
 type School = { id: string; name: string; code: string; logoUrl?: string | null; isActive: boolean };
@@ -19,8 +20,10 @@ export default function SchoolSettingsPage() {
   const [editing, setEditing] = useState<SchoolForm | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [target, setTarget] = useState<School | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
 
-  const askRemove = (s: School) => { setTarget(s); setConfirmOpen(true); };
+  const askRemove = (s: School) => { setTarget(s); setDeleteInput(""); setDeleteOpen(true); };
   const doRemove = async () => {
     if (!target) return;
     try {
@@ -64,15 +67,31 @@ export default function SchoolSettingsPage() {
       />
 
       <SchoolModal isOpen={isOpen} onOpenChange={setOpen} onSaved={() => setReloadKey((k) => k + 1)} initial={editing} />
-      <ConfirmModal
-        isOpen={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title="Hapus Sekolah"
-        description={target ? `Yakin menghapus sekolah "${target.name}"?` : undefined}
-        confirmLabel="Hapus"
-        confirmColor="danger"
-        onConfirm={doRemove}
-      />
+      <Modal isOpen={deleteOpen} onOpenChange={setDeleteOpen} backdrop="blur">
+        <ModalContent>
+          {() => (
+            <>
+              <ModalHeader>Hapus Sekolah</ModalHeader>
+              <ModalBody>
+                {target ? (
+                  <div className="space-y-3">
+                    <p className="text-sm">Tindakan ini akan menghapus semua data yang berkaitan dengan sekolah ini (kelas, mapel, tahun ajaran, periode, ruang, soal, ujian, keanggotaan pengguna, dsb). Tindakan tidak dapat dibatalkan.</p>
+                    <p className="text-sm">Ketik nama sekolah untuk konfirmasi:</p>
+                    <div className="text-sm font-semibold">{target.name}</div>
+                    <Input value={deleteInput} onChange={(e) => setDeleteInput(e.target.value)} placeholder="Ketik nama sekolah persis" />
+                  </div>
+                ) : null}
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="flat" onPress={() => setDeleteOpen(false)}>Batal</Button>
+                <Button color="danger" isDisabled={!target || deleteInput.trim() !== target.name} onPress={async () => { await doRemove(); setDeleteOpen(false); }}>
+                  Hapus
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

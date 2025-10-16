@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   };
   const total = await prisma.question.count({ where });
   const { skip, take } = pageToSkipTake(page, perPage);
-  const data = await prisma.question.findMany({ where, orderBy: [{ createdAt: "asc" }], skip, take, select: { id: true, type: true, text: true, points: true, difficulty: true, options: true, correctKey: true, subjectId: true } });
+  const data = await prisma.question.findMany({ where, orderBy: [{ createdAt: "asc" }], skip, take, select: ({ id: true, type: true, text: true, points: true, difficulty: true, options: true, correctKey: true, subjectId: true, attachmentUrl: true, attachmentType: true, audioUrl: true } as any) });
   return NextResponse.json({ data, page, perPage, total, totalPages: Math.ceil(total / perPage) });
 }
 
@@ -51,6 +51,9 @@ export async function POST(req: NextRequest) {
       difficulty: z.number().int().min(0).max(10).default(1),
       academicYearId: z.string().trim().optional().nullable(),
       periodId: z.string().trim().optional().nullable(),
+      attachmentUrl: z.string().url().optional().nullable(),
+      attachmentType: z.string().optional().nullable(),
+      audioUrl: z.string().url().optional().nullable(),
     });
     const body = zparse(schema, await req.json());
     const token = req.cookies.get(ACCESS_COOKIE)?.value;
@@ -70,7 +73,7 @@ export async function POST(req: NextRequest) {
       if (body.academicYearId && period.academicYearId !== body.academicYearId) return NextResponse.json({ message: "Periode tidak sesuai tahun ajaran" }, { status: 400 });
     }
     const created = await prisma.question.create({
-      data: {
+      data: ({
         schoolId: ctx.schoolId,
         subjectId: body.subjectId,
         type: body.type,
@@ -82,7 +85,10 @@ export async function POST(req: NextRequest) {
         createdById: payload.sub,
         academicYearId: body.academicYearId ?? null,
         periodId: body.periodId ?? null,
-      },
+        attachmentUrl: (body as any).attachmentUrl ?? null,
+        attachmentType: (body as any).attachmentType ?? null,
+        audioUrl: (body as any).audioUrl ?? null,
+      } as any),
       select: { id: true },
     });
     return NextResponse.json({ id: created.id });
